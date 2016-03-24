@@ -1,0 +1,20 @@
+If the program should hang or consume too much RAM...
+
+import the profiler in main.go:
+
+import _ "net/http/pprof"
+
+and start profiler server in main() before srv.ListenAndServe():
+
+        go func() {
+                log.Println(http.ListenAndServe(":6060", nil))
+        }()
+
+Now you can obtain goroutine and heap graphs using:
+
+go tool pprof -pdf http://localhost:6060/debug/pprof/goroutine >goroutines.pdf
+go tool pprof -pdf http://localhost:6060/debug/pprof/heap >heap.pdf
+
+Stack dump of all goroutines can be seen at
+http://localhost:6060/debug/pprof/goroutine?debug=2
+

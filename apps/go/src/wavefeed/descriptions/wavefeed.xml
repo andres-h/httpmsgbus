@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<seiscomp>
+	<module name="wavefeed" category="Acquisition" standalone="true">
+		<description>Client that feeds waveform data to the HMB.</description>
+		<configuration>
+			<parameter name="unreliableChannelsRegex" type="string" default="LOG|AE.">
+				<description>
+				Regex matching channels with unreliable timestamps. Such channels must
+				be handled specially in order to not break the binary search in HMB.
+				</description>
+			</parameter>
+			<parameter name="timeout" type="int" default="120">
+				<description>
+				HMB timeout in seconds.
+				</description>
+			</parameter>
+			<parameter name="bufferSize" type="int" default="1024">
+				<description>
+				Maximum number of messages to buffer.
+				</description>
+			</parameter>
+		</configuration>
+	</module>
+</seiscomp>

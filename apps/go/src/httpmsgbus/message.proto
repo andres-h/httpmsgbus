@@ -1,0 +1,18 @@
+package main;
+
+message ProtoMessage {
+	enum DataType {
+		Binary = 0;
+		BSON = 1;
+	}
+
+	required string type = 1;
+	required string queue = 2;
+	required string sender = 3;
+	required string topic = 4;
+	required int64 seq = 5;
+	required bytes starttime = 6;
+	required bytes endtime = 7;
+	required DataType dataType = 8;
+	required bytes data = 9;
+}

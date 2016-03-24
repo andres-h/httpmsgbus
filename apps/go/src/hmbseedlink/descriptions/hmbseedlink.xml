@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<seiscomp>
+	<module name="hmbseedlink" category="Acquisition" standalone="true">
+		<description>HMB-based Real-time waveform server implementing the SeedLink protocol.</description>
+		<configuration>
+			<parameter name="port" type="int" default="18000">
+				<description>
+				TCP port that the server is running on.
+				</description>
+			</parameter>
+			<parameter name="timeout" type="int" default="120">
+				<description>
+				HMB timeout in seconds.
+				</description>
+			</parameter>
+			<parameter name="connectionsPerIP" type="int" default="10">
+				<description>
+				Maximum number of connections per IP. 0 = unlimited.
+				</description>
+			</parameter>
+			<parameter name="qlen" type="int" default="0">
+				<description>
+				Limit backlog of records (queue length). 0 = no limit.
+				</description>
+			</parameter>
+			<parameter name="oowait" type="int" default="0">
+				<description>
+				Wait for out-of-order data in seconds. 0 = no wait.
+				</description>
+			</parameter>
+		</configuration>
+	</module>
+</seiscomp>

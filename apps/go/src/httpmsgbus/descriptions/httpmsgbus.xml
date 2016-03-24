@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<seiscomp>
+	<module name="httpmsgbus" category="Messaging" standalone="true">
+		<description>HTTP message bus.</description>
+		<configuration>
+			<parameter name="database" type="string" default="filedb://@ROOTDIR@/var/lib/httpmsgbus?blocksize=1024&blocksPerFile=16384">
+				<description>
+				URL of the backing database (mongodb:// or filedb://).
+				</description>
+			</parameter>
+			<parameter name="bufferSize" type="int" default="100">
+				<description>
+				RAM buffer size (messages per queue).
+				</description>
+			</parameter>
+			<parameter name="queueSize" type="int" default="256">
+				<description>
+				Queue (eg., MongoDB capped collection) size in MB.
+				</description>
+			</parameter>
+			<parameter name="requestSize" type="int" default="10240">
+				<description>
+				Maximum size of POST data in KB.
+				</description>
+			</parameter>
+			<parameter name="sessionTimeout" type="int" default="120">
+				<description>
+				Session timeout in seconds.
+				</description>
+			</parameter>
+			<parameter name="sessionsPerIP" type="int" default="10">
+				<description>
+				Maximum number of connections (sessions) per IP. 0 = unlimited.
+				</description>
+			</parameter>
+			<parameter name="delta" type="int" default="0">
+				<description>
+				Limit sequence difference into future. 0 = no limit.
+				</description>
+			</parameter>
+			<parameter name="useXFF" type="bool" default="false">
+				<description>
+				Get client IP from X-Forwarded-For header if available.
+				</description>
+			</parameter>
+		</configuration>
+	</module>
+</seiscomp>

@@ -1,0 +1,1 @@
+SUBDIRS(hmbseedlink httpmsgbus wavefeed)

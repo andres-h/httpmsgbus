@@ -1,0 +1,38 @@
+httpmsgbus (HMB) can be used as a standalone program or as an add-on to
+SeisComP 3 [1]; the code can be copied to SC3 source tree and compiled
+together with the rest of the SC3 using CMake or installed separately using
+the install.sh script. Go compiler [2] is required to compile the code.
+
+In SeisComP 3, HMB is disabled by default and can be enabled by adding the
+following options to ~/seiscomp3/etc/kernel.ini:
+
+hmb.enable = true
+hmb.port = 8000
+
+The distribution includes an alternative Seedlink implementation consisting
+of "hmbseedlink" and "wavefeed" modules, which can used as a drop-in
+replacement for the standard "seedlink" module. Normal seedlink bindings
+are used, but only chain sources are supported.
+
+There are two simple demo scripts, send_json.py and receive_json.py, in
+doc/examples/python directory. Start httpmsgbus without arguments and call
+"python send_json.py notice 'something happened'" in another shell. The bus
+http://localhost:8000/test and the queue SYSTEM_ALERT will be created
+dynamically. Now start "python receive_json.py" in third shell window. You
+can observe that messages sent by send.py will be received by receive.py.
+
+BSON counterpars of the scripts, send_bson.py and receive_bson.py require
+the "python-pymongo" package to be installed.
+
+You may also test persistent storage by using the option "-D filedb://filedb"
+of httpmsgbus. The folder "filedb" will be created in the current directory
+(use filedb:/// for absolute path).
+
+If you are running MongoDB, try "-D mongodb://localhost:27017".
+
+HMB does not implement SSL, HTTP compression and authentication. Those
+features can be provided by a reverse proxy (eg., Apache with mod_proxy).
+
+[1] https://github.com/SeisComP3/seiscomp3
+[2] https://golang.org/dl/
+
