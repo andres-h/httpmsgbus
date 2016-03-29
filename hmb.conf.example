@@ -1,0 +1,15 @@
+# Apache config using mod_proxy and mod_deflate and implementing
+# basic authentication (SSL recommended).
+
+ProxyPass        /hmb/busname/ http://hmbserver:8000/busname/
+ProxyPassReverse /hmb/busname/ http://hmbserver:8000/busname/
+
+<Proxy http://hmbserver:8000/>
+AuthType Basic
+AuthName "HMB"
+AuthUserFile /srv/www/hmbusers
+Require valid-user
+SetOutputFilter DEFLATE
+SetInputFilter INFLATE
+</Proxy>
+
