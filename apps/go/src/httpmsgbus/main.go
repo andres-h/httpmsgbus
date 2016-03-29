@@ -391,6 +391,8 @@ func (self *Handler) features(bus *Bus, w http.ResponseWriter, r *http.Request, 
 		},
 	}
 
+	w.Header().Add("Content-Type", "application/json")
+
 	if features, err := json.Marshal(features); err != nil {
 		panic(err)
 
