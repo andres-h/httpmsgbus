@@ -37,7 +37,7 @@ import (
 	"time"
 )
 
-const VERSION = "0.16 (2016.089)"
+const VERSION = "0.16 (2016.090)"
 
 const (
 	// The following parameters should be tuned for optimum performance.
@@ -278,7 +278,6 @@ func (self *Handler) open(bus *Bus, w http.ResponseWriter, r *http.Request, args
 
 	// If the client sends JSON, we reply in JSON, otherwise in BSON.
 	if r.Header.Get("Content-Type") == "application/json" {
-		w.Header().Add("Content-Type", "application/json")
 		decoder := json.NewDecoder(r.Body)
 
 		var param OpenParam
@@ -294,12 +293,15 @@ func (self *Handler) open(bus *Bus, w http.ResponseWriter, r *http.Request, args
 		} else if ack, err := json.Marshal(ack); err != nil {
 			panic(err)
 
-		} else if _, err := w.Write(ack); err != nil {
-			LogRequestError(r, err.Error())
+		} else {
+			w.Header().Add("Content-Type", "application/json")
+
+			if _, err := w.Write(ack); err != nil {
+				LogRequestError(r, err.Error())
+			}
 		}
 
 	} else {
-		w.Header().Add("Content-Type", "application/bson")
 		buf := bytes.Buffer{}
 
 		var param OpenParam
@@ -318,8 +320,12 @@ func (self *Handler) open(bus *Bus, w http.ResponseWriter, r *http.Request, args
 		} else if ack, err := bson.Marshal(ack); err != nil {
 			panic(err)
 
-		} else if _, err := w.Write(ack); err != nil {
-			LogRequestError(r, err.Error())
+		} else {
+			w.Header().Add("Content-Type", "application/bson")
+
+			if _, err := w.Write(ack); err != nil {
+				LogRequestError(r, err.Error())
+			}
 		}
 	}
 }
@@ -391,13 +397,15 @@ func (self *Handler) features(bus *Bus, w http.ResponseWriter, r *http.Request, 
 		},
 	}
 
-	w.Header().Add("Content-Type", "application/json")
-
 	if features, err := json.Marshal(features); err != nil {
 		panic(err)
 
-	} else if _, err := w.Write(features); err != nil {
-		LogRequestError(r, err.Error())
+	} else {
+		w.Header().Add("Content-Type", "application/json")
+
+		if _, err := w.Write(features); err != nil {
+			LogRequestError(r, err.Error())
+		}
 	}
 }
 
