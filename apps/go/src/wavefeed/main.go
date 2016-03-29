@@ -27,7 +27,7 @@ import (
 	"time"
 )
 
-const VERSION = "0.1 (2016.082)"
+const VERSION = "0.1 (2016.090)"
 
 const (
 	PLUGINFD        = 63
@@ -255,7 +255,10 @@ func (self *Worker) writer() {
 		copy(msgs, self.msgs)
 		self.msgs = self.msgs[:0]
 		self.pong <- true
-		self.hmb.Send(msgs[:n])
+
+		if err := self.hmb.Send(msgs[:n]); err != nil {
+			log.Fatal(err)
+		}
 	}
 }
 

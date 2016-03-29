@@ -9,14 +9,14 @@
 				be handled specially in order to not break the binary search in HMB.
 				</description>
 			</parameter>
-			<parameter name="timeout" type="int" default="120">
-				<description>
-				HMB timeout in seconds.
-				</description>
-			</parameter>
 			<parameter name="bufferSize" type="int" default="1024">
 				<description>
 				Maximum number of messages to buffer.
+				</description>
+			</parameter>
+			<parameter name="timeout" type="int" default="120">
+				<description>
+				HMB timeout in seconds.
 				</description>
 			</parameter>
 		</configuration>
