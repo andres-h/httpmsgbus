@@ -43,9 +43,10 @@ func (self *Producer) notify() {
 }
 
 // Start starts the Producer. The function returns when
-// a) /recv is used and pending data has been sent or recvLimit is reached;
-// b) connection is broken or closed by client;
-// c) closeChan is closed (SIGINT or SIGTERM received).
+// a) session.Pull() returns EOF;
+// b) /recv is used and pending data has been sent or recvLimit is reached;
+// c) connection is broken or closed by client;
+// d) closeChan is closed (SIGINT or SIGTERM received).
 func (self *Producer) Start() {
 	self.session.AttachNotifier(self.notify)
 

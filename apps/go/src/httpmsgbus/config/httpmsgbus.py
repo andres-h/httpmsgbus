@@ -62,7 +62,7 @@ class Module(seiscomp3.Kernel.CoreModule):
         except: pass
         try: params += ' -q %d' % cfg.getInt('queueSize')
         except: pass
-        try: params += ' -r %d' % cfg.getInt('requestSize')
+        try: params += ' -p %d' % cfg.getInt('postSize')
         except: pass
         try: params += ' -t %d' % cfg.getInt('sessionTimeout')
         except: pass

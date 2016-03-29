@@ -22,8 +22,11 @@ ack = json.loads(urlopen(r, json.dumps(param)).read())
 print json.dumps(ack, indent=2)
 
 oid = ""
-while True:
-    with urlopen(BUS + '/recv/' + str(ack['sid']) + oid) as fh:
+eof = False
+
+while not eof:
+    fh = urlopen(BUS + '/recv/' + str(ack['sid']) + oid)
+    try:
         for msg in json.loads(fh.read()).values():
             print json.dumps(msg, indent=2)
 
@@ -32,4 +35,9 @@ while True:
 
             except KeyError:
                 pass
+
+            eof = (msg['type'] == 'EOF')
+
+    finally:
+        fh.close()
 

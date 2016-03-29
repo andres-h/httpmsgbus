@@ -124,7 +124,7 @@ POST input:
   }
 
 cid
-  Requested client ID (optional). If the client name is not unique, HTTP 400 error is returned.
+  Requested client ID (optional).
 
 heartbeat
   Heartbeat interval in seconds.
@@ -404,4 +404,3 @@ topics
 ********************
 
 Works like /recv, except that /stream sends an endless stream of messages and never returns. In case of JSON format, an array-style document is returned; since the document has no end, only a progressive JSON parser would be useful.
-

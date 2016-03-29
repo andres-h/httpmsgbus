@@ -316,7 +316,7 @@ func (self *mdbRepository) InitCollection(name string) (Collection, error) {
 		return nil, err
 	}
 
-	if err := C.EnsureIndex(mgo.Index{Key: []string{"seq"}}); err != nil {
+	if err := C.EnsureIndex(mgo.Index{Key: []string{"seq"}, Unique: true}); err != nil {
 		return nil, err
 	}
 

@@ -18,7 +18,7 @@
 				Queue (eg., MongoDB capped collection) size in MB.
 				</description>
 			</parameter>
-			<parameter name="requestSize" type="int" default="10240">
+			<parameter name="postSize" type="int" default="10240">
 				<description>
 				Maximum size of POST data in KB.
 				</description>
@@ -35,7 +35,7 @@
 			</parameter>
 			<parameter name="delta" type="int" default="0">
 				<description>
-				Limit sequence difference into future. 0 = no limit.
+				Maximum sequence difference into future.
 				</description>
 			</parameter>
 			<parameter name="useXFF" type="bool" default="false">

@@ -343,6 +343,98 @@ type Message struct {
 	Gdacs map[string]interface{} `json:"gdacs,omitempty" bson:"gdacs,omitempty"`
 }
 
+// json.Marshal() ignores "omitempty" in case of non-native types, so let's
+// serialize the fields manually.
+func appendJSON(buf []byte, key string, value interface{}) ([]byte, error) {
+	if jvalue, err := json.Marshal(value); err != nil {
+		return nil, err
+
+	} else {
+		if len(buf) > 1 {
+			buf = append(buf, ',')
+		}
+
+		buf = append(buf, []byte(`"`+key+`":`)...)
+		buf = append(buf, jvalue...)
+	}
+
+	return buf, nil
+}
+
+func (self *Message) MarshalJSON() ([]byte, error) {
+	buf := make([]byte, 1, 1024) // 1024 is initial capacity, grows as needed
+	buf[0] = '{'
+
+	var err error
+
+	if buf, err = appendJSON(buf, "type", self.Type); err != nil {
+		return nil, err
+	}
+
+	if self.Queue != "" {
+		if buf, err = appendJSON(buf, "queue", self.Queue); err != nil {
+			return nil, err
+		}
+	}
+
+	if self.Sender != "" {
+		if buf, err = appendJSON(buf, "sender", self.Sender); err != nil {
+			return nil, err
+		}
+	}
+
+	if self.Topic != "" {
+		if buf, err = appendJSON(buf, "topic", self.Topic); err != nil {
+			return nil, err
+		}
+	}
+
+	if self.Seq.Set {
+		if buf, err = appendJSON(buf, "seq", self.Seq); err != nil {
+			return nil, err
+		}
+	}
+
+	if !self.Starttime.IsZero() {
+		if buf, err = appendJSON(buf, "starttime", self.Starttime); err != nil {
+			return nil, err
+		}
+	}
+
+	if !self.Endtime.IsZero() {
+		if buf, err = appendJSON(buf, "endtime", self.Endtime); err != nil {
+			return nil, err
+		}
+	}
+
+	if self.ScMessageType != 0 {
+		if buf, err = appendJSON(buf, "scMessageType", self.ScMessageType); err != nil {
+			return nil, err
+		}
+	}
+
+	if self.ScContentType != 0 {
+		if buf, err = appendJSON(buf, "scContentType", self.ScContentType); err != nil {
+			return nil, err
+		}
+	}
+
+	if self.Gdacs != nil {
+		if buf, err = appendJSON(buf, "gdacs", self.Gdacs); err != nil {
+			return nil, err
+		}
+	}
+
+	if self.Data.Data != nil {
+		if buf, err = appendJSON(buf, "data", self.Data); err != nil {
+			return nil, err
+		}
+	}
+
+	buf = append(buf, '}')
+	return buf, nil
+}
+
 // MarshalProtobuf serializes the message in Protobuf format. Protobuf is used
 // internally by the filedb simply because it is faster than BSON. Note that
 // only Binary and BSON (document) payloads are supported, any other types must

@@ -37,7 +37,7 @@ import (
 	"time"
 )
 
-const VERSION = "0.16 (2016.082)"
+const VERSION = "0.16 (2016.089)"
 
 const (
 	// The following parameters should be tuned for optimum performance.
@@ -95,7 +95,7 @@ var log = _log.New(os.Stdout, "", _log.LstdFlags)
 // Handler implements the http.Handler interface
 type Handler struct {
 	bufferSize     int               // Commandline parameter
-	requestSize    int               // Commandline parameter
+	postSize       int               // Commandline parameter
 	sessionTimeout int               // Commandline parameter
 	sessionsPerIP  int               // Commandline parameter
 	delta          int               // Commandline parameter
@@ -461,7 +461,7 @@ func (self *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		self.mutex.Unlock()
 
 		// Add POST size limiter.
-		r.Body = http.MaxBytesReader(w, r.Body, int64(self.requestSize)*1024)
+		r.Body = http.MaxBytesReader(w, r.Body, int64(self.postSize)*1024)
 
 		switch method {
 		case "open":
@@ -498,9 +498,9 @@ func main() {
 	port := flag.Int("P", 8000, "TCP port")
 	bufferSize := flag.Int("b", 100, "Buffer (RAM) size in messages per queue")
 	sessionsPerIP := flag.Int("c", 10, "Connections (sessions) per IP")
-	delta := flag.Int("d", 0, "Limit sequence difference into future")
+	delta := flag.Int("d", 0, "Maximum sequence difference into future (default 0)")
+	postSize := flag.Int("p", 10240, "Maximum size of POST data in KB")
 	queueSize := flag.Int("q", 256, "Queue (MongoDB capped collection) size in MB")
-	requestSize := flag.Int("r", 10240, "Maximum size of POST data in KB")
 	useSyslog := flag.Bool("s", false, "Log via syslog")
 	sessionTimeout := flag.Int("t", 120, "Session timeout in seconds")
 
@@ -628,7 +628,7 @@ func main() {
 			Addr: fmt.Sprintf(":%d", *port),
 			Handler: &Handler{
 				bufferSize:     *bufferSize,
-				requestSize:    *requestSize,
+				postSize:       *postSize,
 				sessionTimeout: *sessionTimeout,
 				sessionsPerIP:  *sessionsPerIP,
 				delta:          *delta,
