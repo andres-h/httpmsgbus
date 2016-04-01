@@ -6,11 +6,11 @@ cd "`dirname "$0"`"
 export GOPATH="`pwd`/apps/go"
 
 cd "$GOPATH/src"
-go get github.com/glenn-brown/golang-pkg-pcre/src/pkg/pcre
-go get github.com/golang/groupcache/lru
-go get github.com/golang/protobuf/proto
-go get gopkg.in/mgo.v2
-go get gopkg.in/tylerb/graceful.v1
+go get -u github.com/glenn-brown/golang-pkg-pcre/src/pkg/pcre
+go get -u github.com/golang/groupcache/lru
+go get -u github.com/golang/protobuf/proto
+go get -u gopkg.in/mgo.v2
+go get -u gopkg.in/tylerb/graceful.v1
 go install httpmsgbus hmbseedlink wavefeed
 mkdir -p ~/seiscomp3/sbin
 cp -p ../bin/* ~/seiscomp3/sbin

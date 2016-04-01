@@ -253,7 +253,7 @@ Purpose: sends a message.
 
 Arguments: /sid
 
-sid::
+sid
   The session ID received from /open.
 
 POST input:

@@ -16,6 +16,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"flag"
+	"fmt"
 	"hmb"
 	"io"
 	_log "log"
@@ -27,7 +28,7 @@ import (
 	"time"
 )
 
-const VERSION = "0.1 (2016.090)"
+const VERSION = "0.1 (2016.092)"
 
 const (
 	PLUGINFD        = 63
@@ -285,12 +286,18 @@ func (self *Worker) Start() {
 func main() {
 	cmd := flag.String("C", "", "Plugin command line")
 	sink := flag.String("H", "", "Destination HMB URL")
+	showVersion := flag.Bool("V", false, "Show program's version and exit")
 	utch := flag.String("X", "", "Regex matching channels with unreliable timing")
 	bufsize := flag.Int("b", 1024, "Maximum number of messages to buffer")
 	useSyslog := flag.Bool("s", false, "Log via syslog")
 	timeout := flag.Int("t", 120, "HMB timeout in seconds")
 
 	flag.Parse()
+
+	if *showVersion {
+		fmt.Printf("wavefeed v%s\n", VERSION)
+		return
+	}
 
 	if *cmd == "" {
 		log.Fatal("missing plugin command line")

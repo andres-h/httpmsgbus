@@ -22,7 +22,7 @@ import (
 	"runtime"
 )
 
-const VERSION = "0.1 (2016.082)"
+const VERSION = "0.1 (2016.092)"
 
 const (
 	SYSLOG_FACILITY = syslog.LOG_LOCAL0
@@ -35,6 +35,7 @@ func main() {
 	source := flag.String("H", "", "Source HMB URL")
 	organization := flag.String("O", "", "Organization")
 	port := flag.Int("P", 18000, "TCP port")
+	showVersion := flag.Bool("V", false, "Show program's version and exit")
 	connsPerIP := flag.Int("c", 10, "Connections per IP")
 	qlen := flag.Int("d", 0, "Limit backlog of records (queue length)")
 	useSyslog := flag.Bool("s", false, "Log via syslog")
@@ -42,6 +43,11 @@ func main() {
 	oowait := flag.Int("w", 0, "Wait for out-of-order data in seconds")
 
 	flag.Parse()
+
+	if *showVersion {
+		fmt.Printf("HMB SeedLink v%s\n", VERSION)
+		return
+	}
 
 	if *source == "" {
 		log.Fatal("missing source HMB URL")

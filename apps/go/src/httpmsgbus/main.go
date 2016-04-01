@@ -37,7 +37,7 @@ import (
 	"time"
 )
 
-const VERSION = "0.16 (2016.090)"
+const VERSION = "0.16 (2016.092)"
 
 const (
 	// The following parameters should be tuned for optimum performance.
@@ -506,6 +506,7 @@ func main() {
 	database := flag.String("D", "", "Database URL")
 	useXFF := flag.Bool("F", false, "Use X-Forwarded-For")
 	port := flag.Int("P", 8000, "TCP port")
+	showVersion := flag.Bool("V", false, "Show program's version and exit")
 	bufferSize := flag.Int("b", 100, "Buffer (RAM) size in messages per queue")
 	sessionsPerIP := flag.Int("c", 10, "Connections (sessions) per IP")
 	delta := flag.Int("d", 0, "Maximum sequence difference into future (default 0)")
@@ -515,6 +516,11 @@ func main() {
 	sessionTimeout := flag.Int("t", 120, "Session timeout in seconds")
 
 	flag.Parse()
+
+	if *showVersion {
+		fmt.Printf("httpmsgbus v%s\n", VERSION)
+		return
+	}
 
 	var repoFactory RepositoryFactory
 
