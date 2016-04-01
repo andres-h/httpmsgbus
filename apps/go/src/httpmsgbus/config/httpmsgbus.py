@@ -57,7 +57,7 @@ class Module(seiscomp3.Kernel.CoreModule):
         params = self.env.lockFile(self.name) + ' ' + self.env.binaryFile(self.name)
         params += ' -P %d' % self.hmbPort
         try: params += ' -D "%s"' % cfg.getString('database')
-        except: params += ' -D "filedb://%s/var/lib/httpmsgbus?blocksize=1024&blocksPerFile=16384"' % self.env.SEISCOMP_ROOT
+        except: pass
         try: params += ' -b %d' % cfg.getInt('bufferSize')
         except: pass
         try: params += ' -q %d' % cfg.getInt('queueSize')

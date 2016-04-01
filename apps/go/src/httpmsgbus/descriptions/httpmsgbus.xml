@@ -3,7 +3,7 @@
 	<module name="httpmsgbus" category="Messaging" standalone="true">
 		<description>HTTP message bus.</description>
 		<configuration>
-			<parameter name="database" type="string" default="filedb://@ROOTDIR@/var/lib/httpmsgbus?blocksize=1024&amp;blocksPerFile=16384">
+			<parameter name="database" type="string">
 				<description>
 				URL of the backing database (mongodb:// or filedb://).
 				</description>
