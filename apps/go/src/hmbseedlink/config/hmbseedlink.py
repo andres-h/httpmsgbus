@@ -50,7 +50,7 @@ class Module(seiscomp3.Kernel.Module):
         except: pass
         try: params += ' -c %d' % cfg.getInt('connectionsPerIP')
         except: pass
-        try: params += ' -d %d' % cfg.getInt('qlen')
+        try: params += ' -q %d' % cfg.getInt('qlen')
         except: pass
         try: params += ' -w %d' % cfg.getInt('oowait')
         except: pass

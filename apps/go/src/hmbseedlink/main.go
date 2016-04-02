@@ -37,7 +37,7 @@ func main() {
 	port := flag.Int("P", 18000, "TCP port")
 	showVersion := flag.Bool("V", false, "Show program's version and exit")
 	connsPerIP := flag.Int("c", 10, "Connections per IP")
-	qlen := flag.Int("d", 0, "Limit backlog of records (queue length)")
+	qlen := flag.Int("q", 0, "Limit backlog of records (queue length)")
 	useSyslog := flag.Bool("s", false, "Log via syslog")
 	timeout := flag.Int("t", 120, "HMB timeout in seconds")
 	oowait := flag.Int("w", 0, "Wait for out-of-order data in seconds")
