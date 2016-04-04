@@ -28,7 +28,7 @@ import (
 	"time"
 )
 
-const VERSION = "0.1 (2016.092)"
+const VERSION = "0.1 (2016.095)"
 
 const (
 	PLUGINFD        = 63
@@ -130,6 +130,11 @@ func (self *Worker) readPacket() error {
 
 		timestamp := time.Date(year, time.Month(1), 1, hour, minute, second, usec*1000, time.UTC).Add(time.Duration((yday-1)*24) * time.Hour)
 
+		if t := timestamp.Unix(); t < 0 || t > 253402297199 {
+			log.Println("LOG_"+sta, "invalid time:", timestamp)
+			return nil
+		}
+
 		self.msgs = append(self.msgs, &hmb.Message{
 			Type:      "TEXT",
 			Queue:     "LOG_" + sta,
@@ -169,29 +174,6 @@ func (self *Worker) readPacket() error {
 			self.seqt[StationKey{net, sta}] = seqt
 		}
 
-		var stime, etime time.Time
-
-		if self.utrx != nil && self.utrx.MatchString(mcha) && !seqt.t.IsZero() {
-			etime = seqt.t
-
-			if sr != 0 {
-				stime = etime.Add(-time.Duration(float64(time.Second) * float64(nsamp) / sr))
-			} else {
-				stime = etime
-			}
-
-		} else {
-			stime := time.Date(year, time.Month(1), 1, hour, minute, second, tms*100000, time.UTC).Add(time.Duration((yday-1)*24) * time.Hour)
-
-			if sr != 0 {
-				etime = stime.Add(time.Duration(float64(time.Second) * float64(nsamp) / sr))
-			} else {
-				etime = etime
-			}
-
-			seqt.t = etime
-		}
-
 		var topic string
 		var seq hmb.Sequence
 
@@ -213,6 +195,39 @@ func (self *Worker) readPacket() error {
 			}
 		}
 
+		var stime, etime time.Time
+
+		if self.utrx != nil && self.utrx.MatchString(topic) && !seqt.t.IsZero() {
+			etime = seqt.t
+
+			if sr != 0 {
+				stime = etime.Add(-time.Duration(float64(time.Second) * float64(nsamp) / sr))
+			} else {
+				stime = etime
+			}
+
+		} else {
+			stime = time.Date(year, time.Month(1), 1, hour, minute, second, tms*100000, time.UTC).Add(time.Duration((yday-1)*24) * time.Hour)
+
+			if sr != 0 {
+				etime = stime.Add(time.Duration(float64(time.Second) * float64(nsamp) / sr))
+			} else {
+				etime = stime
+			}
+
+			seqt.t = etime
+		}
+
+		if t := stime.Unix(); t < 0 || t > 253402297199 {
+			log.Println("WAVE_"+net+"_"+sta, topic, seq, "invalid starttime:", stime)
+			return nil
+		}
+
+		if t := etime.Unix(); t < 0 || t > 253402297199 {
+			log.Println("WAVE_"+net+"_"+sta, topic, seq, "invalid endtime:", etime)
+			return nil
+		}
+
 		self.msgs = append(self.msgs, &hmb.Message{
 			Type:      "MSEED",
 			Queue:     "WAVE_" + net + "_" + sta,
@@ -231,6 +246,9 @@ func (self *Worker) reader() {
 	for {
 		if err := self.readPacket(); err != nil {
 			log.Fatal(err)
+
+		} else if len(self.msgs) == 0 {
+			continue
 
 		} else if len(self.msgs) < cap(self.msgs) {
 			self.ping <- true

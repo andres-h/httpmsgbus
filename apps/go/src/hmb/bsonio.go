@@ -84,7 +84,7 @@ func (self *bsonReader) Read() (*Message, error) {
 
 	// Decode the data and return the message.
 	if err := bson.Unmarshal(self.buf[self.ri:self.ri+size], m); err != nil {
-		return nil, errors.New("invalid BSON data")
+		return nil, errors.New("invalid BSON data: " + err.Error())
 
 	} else {
 		self.ri += size

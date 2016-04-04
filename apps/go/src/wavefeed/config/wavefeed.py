@@ -162,7 +162,7 @@ class Module(seiscomp3.Kernel.Module):
         params += ' -C "%s%s -f %s chain0"' % (pbin, psys, pconf)
         params += ' -H http://localhost:%d/wave' % self.hmbPort
         try: params += ' -X "%s"' % cfg.getString('unreliableChannelsRegex')
-        except: params += ' -X "LOG|AE."'
+        except: params += ' -X "_AE|_[^D]$"'
         try: params += ' -b %d' % cfg.getInt('bufferSize')
         except: pass
         try: params += ' -t %d' % cfg.getInt('timeout')

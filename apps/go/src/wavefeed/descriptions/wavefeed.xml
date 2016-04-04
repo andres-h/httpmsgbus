@@ -3,10 +3,11 @@
 	<module name="wavefeed" category="Acquisition" standalone="true">
 		<description>Client that feeds waveform data to the HMB.</description>
 		<configuration>
-			<parameter name="unreliableChannelsRegex" type="string" default="LOG|AE.">
+			<parameter name="unreliableChannelsRegex" type="string" default="_AE|_[^D]$">
 				<description>
-				Regex matching channels with unreliable timestamps. Such channels must
-				be handled specially in order to not break the binary search in HMB.
+				Regex matching channels (in 00_BHZ_D format) with unreliable timestamps.
+				Such channels must be handled specially in order to not break the binary
+				search in HMB when using filedb.
 				</description>
 			</parameter>
 			<parameter name="bufferSize" type="int" default="1024">

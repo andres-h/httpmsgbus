@@ -40,7 +40,7 @@ func (self *jsonReader) Read() (*Message, error) {
 		var msgs map[string]*Message
 
 		if err := decoder.Decode(&msgs); err != nil {
-			return nil, err
+			return nil, errors.New("invalid JSON data: " + err.Error())
 
 		} else {
 			// Map does not keep the order of messages, but key is
