@@ -1,3 +1,9 @@
+.. _protocol:
+
+********************
+Protocol Description
+********************
+
 Overview
 ========
 

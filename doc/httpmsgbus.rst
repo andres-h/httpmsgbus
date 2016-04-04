@@ -1,3 +1,9 @@
+.. _httpmsgbus:
+
+**********
+httpmsgbus
+**********
+
 Description
 ===========
 
