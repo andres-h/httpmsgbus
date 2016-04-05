@@ -7,7 +7,7 @@ Protocol Description
 Overview
 ========
 
-httpmsgbus is a general-purpose HTTP-based message bus. `JSON <http://json.org/>`_ and `BSON <http://bsonspec.org>`_ formats are used for communication.
+httpmsgbus (HMB) is a general-purpose HTTP-based message bus. `JSON <http://json.org/>`_ and `BSON <http://bsonspec.org>`_ formats are used for communication.
 
 URL format
 ==========
@@ -71,7 +71,7 @@ OOD
 Data format
 ===========
 
-POST data can be in JSON or BSON (cap:BSON) format, the actual format is selected by the Content-Type header. The format of GET data is the same as the format used in /open (JSON or BSON). Sessionless methods (/features, /status, /info) use JSON format.
+POST data can be in JSON (cap:JSON) or BSON (cap:BSON) format, the actual format is selected by the Content-Type header. The format of GET data is the same as the format used in /open (JSON or BSON). Sessionless methods (/features, /status, /info) use JSON format.
 
 Mandatory methods
 =================
