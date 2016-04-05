@@ -10,6 +10,6 @@ AuthName "HMB"
 AuthUserFile /srv/www/hmbusers
 Require valid-user
 SetOutputFilter DEFLATE
-SetInputFilter INFLATE
+SetInputFilter DEFLATE
 </Proxy>
 
