@@ -584,10 +584,11 @@ func (self *Queue) unsubscribe(sub *QueueSubscription) {
 func (self *Queue) DumpInfo(w io.Writer) error {
 	d := QueueInfo{}
 
+	self.rwmutex.RLock()
+
 	if self.seq > 0 {
 		var m *Message
 
-		self.rwmutex.RLock()
 		m = self.ring.Get(0)
 		d.Startseq = m.Seq
 		d.Starttime = m.Starttime
@@ -617,10 +618,10 @@ func (self *Queue) DumpInfo(w io.Writer) error {
 			}
 		}
 
-		self.rwmutex.RUnlock()
-
 		d.Topic = topics
 	}
+
+	self.rwmutex.RUnlock()
 
 	if buf, err := json.Marshal(d); err != nil {
 		panic(err)
