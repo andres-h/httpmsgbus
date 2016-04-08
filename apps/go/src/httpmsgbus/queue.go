@@ -504,21 +504,11 @@ func (self *Queue) Subscribe(cid string, notifier func(string, bool), topics []s
 	}
 
 	if len(pt) > 0 {
-		if topicRx, err := regexp.Compile("^" + strings.Join(pt, "|") + "$"); err != nil {
-			panic(err)
-
-		} else {
-			sub.topicRx = topicRx
-		}
+		sub.topicRx = regexp.MustCompile("^" + strings.Join(pt, "|") + "$")
 	}
 
 	if len(nt) > 0 {
-		if topicNrx, err := regexp.Compile("^" + strings.Join(nt, "|") + "$"); err != nil {
-			panic(err)
-
-		} else {
-			sub.topicNrx = topicNrx
-		}
+		sub.topicNrx = regexp.MustCompile("^" + strings.Join(nt, "|") + "$")
 	}
 
 	// Lock the mutex, making sure that no new messages are pushed to
@@ -592,9 +582,11 @@ func (self *Queue) DumpInfo(w io.Writer) error {
 		m = self.ring.Get(0)
 		d.Startseq = m.Seq
 		d.Starttime = m.Starttime
+
 		m = self.ring.Get(self.seq - 1)
 		d.Endseq = Sequence{m.Seq.Value + 1, true}
 		d.Endtime = m.Endtime
+
 		self.rwmutex.RUnlock()
 
 		if self.coll != nil {
