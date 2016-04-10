@@ -156,7 +156,7 @@ func (self *mdbCollection) NumQueriesQueued() int {
 // OldestData returns the sequence number and end time of the first message
 // in collection.
 func (self *mdbCollection) OldestData() (int64, Time) {
-	if d, err := self.Query(0, 0, Time{}, Time{}, nil, nil, nil, "", 1, true); err != nil {
+	if d, err := self.Query(0, -1, Time{}, Time{}, nil, nil, nil, "", 1, true); err != nil {
 		log.Println(err)
 
 	} else {

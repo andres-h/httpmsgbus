@@ -134,7 +134,7 @@ type fdbFile struct {
 	fd           *os.File       // File handle (nil if not open)
 	fdc          *fdbCache      // Cache to manage open file handles
 	bufferPool   *sync.Pool     // Pool of reusable buffers of block size
-	wg           sync.WaitGroup // WaitGroup for cache
+	waitGroup    sync.WaitGroup // WaitGroup for cache
 	mutex        sync.Mutex     // Mutex for cache
 }
 
@@ -225,14 +225,14 @@ func (self *fdbFile) ensureOpen() error {
 		self.fdc.Refresh(self)
 	}
 
-	self.wg.Add(1)
+	self.waitGroup.Add(1)
 	return nil
 }
 
 // done reverts the effect of ensureOpen(). The file can be closed whenever
 // a file handle is needed.
 func (self *fdbFile) done() {
-	self.wg.Done()
+	self.waitGroup.Done()
 }
 
 // evict is a callback from cache to close the file handle.
@@ -240,7 +240,7 @@ func (self *fdbFile) evict() {
 	self.mutex.Lock()
 	defer self.mutex.Unlock()
 
-	self.wg.Wait()
+	self.waitGroup.Wait()
 
 	if self.fd == nil {
 		panic("self.fd == nil")

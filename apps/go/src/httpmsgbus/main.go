@@ -37,7 +37,7 @@ import (
 	"time"
 )
 
-const VERSION = "0.16 (2016.099)"
+const VERSION = "0.16 (2016.101)"
 
 const (
 	// The following parameters should be tuned for optimum performance.
