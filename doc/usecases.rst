@@ -77,7 +77,7 @@ Likewise, messages can be received from HMB instead of Spread:
 ::
   $ seiscomp exec scmm -H hmb://localhost:8000/test --console 1 -v
 
-The "pick2hmb" program in the "hmb-clients" repository can be studied as a C++ example of sending SC3 objects to HMB.
+The "pick2hmb" program, included in the distribution, can be studied as a C++ example of sending SC3 objects to HMB.
 
 Sending and receiving waveform data
 ===================================

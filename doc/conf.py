@@ -226,7 +226,11 @@ latex_documents = [
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
 man_pages = [
-    ('index', 'httpmsgbus', u'httpmsgbus Documentation',
+    ('httpmsgbus', 'httpmsgbus', u'HMB server',
+     [u'A. Heinloo'], 1),
+    ('hmbseedlink', 'hmbseedlink', u'HMB SeedLink proxy',
+     [u'A. Heinloo'], 1),
+    ('wavefeed', 'wavefeed', u'HMB wave feeder',
      [u'A. Heinloo'], 1)
 ]
 
@@ -241,7 +245,7 @@ man_pages = [
 #  dir menu entry, description, category)
 texinfo_documents = [
   ('index', 'httpmsgbus', u'httpmsgbus Documentation',
-   u'A. Heinloo', 'httpmsgbus', 'One line description of project.',
+   u'A. Heinloo', 'httpmsgbus', 'A general-purpose HTTP-based message bus.',
    'Miscellaneous'),
 ]
 

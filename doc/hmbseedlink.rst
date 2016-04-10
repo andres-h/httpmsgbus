@@ -1,16 +1,13 @@
-.. _hmbseedlink:
-
-***********
 hmbseedlink
-***********
+===========
 
 Description
-===========
+-----------
 
 "hmbseedlink" is a proxy implementing the SeedLink protocol on top of HMB. A SeedLink station maps to an HMB queue and a SeedLink stream maps to an HMB topic. The payload of an HMB message would be a Mini-SEED record.
 
 Command-line
-============
+------------
 
 hmbseedlink [options]
 

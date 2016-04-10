@@ -5,9 +5,7 @@ Welcome to httpmsgbus
    :maxdepth: 2
 
    protocol
-   httpmsgbus
-   hmbseedlink
-   wavefeed
+   utilities
    installation
    usecases
 

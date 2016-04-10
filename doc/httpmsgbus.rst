@@ -1,16 +1,13 @@
-.. _httpmsgbus:
-
-**********
 httpmsgbus
-**********
+==========
 
 Description
-===========
+-----------
 
 "httpmsgbus" is a server implementing the HMB protocol. It can use a database (-D) or RAM only. httpmsgbus usually runs behind a web server acting as a reverse proxy.
 
 Database URL
-============
+------------
 
 Supported database types are mongodb and filedb. MongoDB is recommended in most scenarios. Filedb is suitable for binary messages with fixed size, such as waveform records. Database URL can take one of the following forms:
 
@@ -35,17 +32,17 @@ maxOpenFiles (default 800)
   Maximum number of file handles to keep open.
 
 X-Forwarded-For
-===============
+---------------
 
 When HMB runs behind a reverse proxy, connections appear to originate from localhost or wherever the proxy is running. Using the X-Forwarded-For HTTP header, it is possible to determine the actual IP address of a client, which is then used for session counting (-c), etc.
 
 Sequence difference into future
-===============================
+-------------------------------
 
 When using multiple servers, it may happen that a client requests a future message that has not reached the current server yet. Sequence numbers in future can be enabled with the -d command-line option. If the maximum difference is exceeded, the sequence number is considered invalid and the current seqence number is used.
 
 Command-line
-============
+------------
 
 httpmsgbus [options]
 
