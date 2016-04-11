@@ -1,5 +1,3 @@
-.. _utilities:
-
 ******************
 Software Utilities
 ******************

@@ -1,5 +1,3 @@
-.. _protocol:
-
 ********************
 Protocol Description
 ********************
@@ -83,12 +81,12 @@ Purpose: returns functions and capabilities supported by the server and optional
 
 Arguments: none.
 
-Response:
-::
+Response::
+
   {
-      "software": <string>,
-      "functions": <list>,
-      "capabilities": <list>
+    "software": <string>,
+    "functions": <list>,
+    "capabilities": <list>
   }
 
 software
@@ -107,26 +105,26 @@ Purpose: opens a session, required by subsequent /send, /recv and /stream (cap:S
 
 Arguments: none
 
-POST input:
-::
+POST input::
+
   {
-      "cid": <string>,
-      "heartbeat": <int>,
-      "recv_limit": <int>
-      "queue": {
-          <queue_name>: {
-              "topics": <list of string>,
-              "seq": <int>,
-              "endseq": <int>,
-              "starttime": <string>,
-              "endtime": <string>,
-              "filter": <doc>,
-              "qlen": <int>,
-              "oowait": <int>,
-              "keep": <bool>
-          },
-          ...
-      }
+    "cid": <string>,
+    "heartbeat": <int>,
+    "recv_limit": <int>,
+    "queue": {
+      <queue_name>: {
+        "topics": <list of string>,
+        "seq": <int>,
+        "endseq": <int>,
+        "starttime": <string>,
+        "endtime": <string>,
+        "filter": <doc>,
+        "qlen": <int>,
+        "oowait": <int>,
+        "keep": <bool>
+      },
+      ...
+    },
   }
 
 cid
@@ -166,7 +164,9 @@ keep
   Keep queue open after all data received (realtime mode).
 
 Response: HTTP 400 with error message or
+
 ::
+
   {
     "queue": {
       <queue_name>: {
@@ -198,38 +198,37 @@ Purpose: returns the status of connected clients (sessions).
 
 Arguments: none.
 
-Response:
-::
-  {
-      "session": {
-          <sid>: {
-              "cid": <string>,
-              "address": <string>,
-              "ctime": <string>,
-              "sent": <int>,
-              "received": <int>,
-              "format": <string>,
-              "heartbeat": <int>,
-              "recv_limit": <int>,
+Response::
 
-              "queue": {
-                  <queue_name>: {
-                      "topics": <list of strings>,
-                      "seq": <int>,
-                      "endseq": <int>,
-                      "starttime": <string>,
-                      "endtime": <string>,
-                      "filter": <doc>,
-                      "qlen": <int>,
-                      "oowait": <int>,
-                      "keep": <bool>,
-                      "eof": <bool>
-                  },
-                  ...
-              },
+  {
+    "session": {
+      <sid>: {
+        "cid": <string>,
+        "address": <string>,
+        "ctime": <string>,
+        "sent": <int>,
+        "received": <int>,
+        "format": <string>,
+        "heartbeat": <int>,
+        "recv_limit": <int>,
+        "queue": {
+          <queue_name>: {
+            "topics": <list of strings>,
+            "seq": <int>,
+            "endseq": <int>,
+            "starttime": <string>,
+            "endtime": <string>,
+            "filter": <doc>,
+            "qlen": <int>,
+            "oowait": <int>,
+            "keep": <bool>,
+            "eof": <bool>
           },
           ...
+        },
       },
+      ...
+    },
   }
 
 address
@@ -262,15 +261,15 @@ Arguments: /sid
 sid
   The session ID received from /open.
 
-POST input:
-::
+POST input::
+
   {
-    "type": <string>
-    "queue": <string>
-    "topic": <string>
-    "seq": <int>
-    "starttime": <int>
-    "endtime": <int>
+    "type": <string>,
+    "queue": <string>,
+    "topic": <string>,
+    "seq": <int>,
+    "starttime": <int>,
+    "endtime": <int>,
     "data": <doc>
   }
 
@@ -296,13 +295,15 @@ data
   Payload.
 
 A heartbeat message can be sent to keep an idle session from expiring. The message is otherwise ignored by the server.
+
 ::
+
   {
     "type": "HEARTBEAT"
   }
 
-JSON and BSON (cap:BSON) formats are supported. Multiple messages can be sent in one /send call; in case of BSON format, multiple messages must be concatenated. In case of JSON format, an array-style document must be sent (even if there is only a single message):
-::
+JSON and BSON (cap:BSON) formats are supported. Multiple messages can be sent in one /send call; in case of BSON format, multiple messages must be concatenated. In case of JSON format, an array-style document must be sent (even if there is only a single message)::
+
   {
     "0": <msg>,
     "1": <msg>,
@@ -329,15 +330,17 @@ If sid is not known to server, HTTP 400 is returned and the client should procee
 If queue/seq does not match queue/seq of last message sent, HTTP 400 is returned and the client should proceed with /open to create a new session. However, if queue/seq does match an earlier object, the server may roll back and continue.
 
 Response: HTTP 400 with error message or
+
 ::
+
   {
-    "type": <string>
-    "queue": <string>
-    "topic": <string>
-    "sender": <string>
-    "seq": <int>
-    "starttime": <int>
-    "endtime": <int>
+    "type": <string>,
+    "queue": <string>,
+    "topic": <string>,
+    "sender": <string>,
+    "seq": <int>,
+    "starttime": <int>,
+    "endtime": <int>,
     "data": <doc>
   }
 
@@ -353,8 +356,8 @@ HEARTBEAT
 EOF (cap:WINDOW)
   End of time window (or endseq) reached.
 
-/recv blocks until at least one message (incl. HEARTBEAT) is available and then returns one or more messages. In case of JSON format, an array-style document is returned (even if the response only contains a single message):
-::
+/recv blocks until at least one message (incl. HEARTBEAT) is available and then returns one or more messages. In case of JSON format, an array-style document is returned (even if the response only contains a single message)::
+
   {
     "0": <msg>,
     "1": <msg>,
@@ -371,24 +374,25 @@ Purpose: returns the list of queues and topics and available data.
 
 Arguments: none.
 
-Response:
-::
+Response::
+
   {
     "queue": {
       <queue_name>: {
-          "startseq": <int>,
-          "starttime": <string>,
-          "endseq": <int>,
-          "endtime": <string>,
-          "topics": {
-              <topic>: {
-                  "starttime": <string>,
-                  "endtime": <string>
-              },
-              ...
+        "startseq": <int>,
+        "starttime": <string>,
+        "endseq": <int>,
+        "endtime": <string>,
+        "topics": {
+          <topic>: {
+            "starttime": <string>,
+            "endtime": <string>
           },
+          ...
+        },
       },
       ...
+    },
   }
       
 startseq
