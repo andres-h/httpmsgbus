@@ -2,11 +2,6 @@
 Protocol Description
 ********************
 
-Overview
-========
-
-httpmsgbus (HMB) is a general-purpose HTTP-based message bus. `JSON <http://json.org/>`_ and `BSON <http://bsonspec.org>`_ formats are used for communication.
-
 URL format
 ==========
 

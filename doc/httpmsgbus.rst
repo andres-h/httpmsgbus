@@ -4,7 +4,7 @@ httpmsgbus
 Description
 -----------
 
-"httpmsgbus" is a server implementing the HMB protocol. It can use a database (-D) or RAM only. httpmsgbus usually runs behind a web server acting as a reverse proxy.
+*httpmsgbus* is a server implementing the HMB protocol. It can use a database (-D) or RAM only. httpmsgbus usually runs behind a web server acting as a reverse proxy.
 
 Database URL
 ------------

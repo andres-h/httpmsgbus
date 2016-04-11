@@ -4,7 +4,7 @@ wavefeed
 Description
 -----------
 
-"wavefeed" is a program that runs a SeedLink plugin (normally chain_plugin) and sends the waveform data to HMB. Only log and Mini-SEED packets are supported.
+*wavefeed* is a program that runs a SeedLink plugin (normally chain_plugin) and sends the waveform data to HMB. Only log and Mini-SEED packets are supported.
 
 Command-line
 ------------
