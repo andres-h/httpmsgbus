@@ -44,7 +44,7 @@ master_doc = 'index'
 
 # General information about the project.
 project = u'httpmsgbus'
-copyright = u'2015–2016 GEOFON team, Helmoltz-Zentrum Potsdam - Deutsches GeoForschungsZentrum GFZ'
+copyright = u'2015–2016 Helmholtz-Zentrum Potsdam - Deutsches GeoForschungsZentrum GFZ'
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
