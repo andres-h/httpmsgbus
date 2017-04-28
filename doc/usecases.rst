@@ -57,7 +57,7 @@ The BSON format can be used to embed binary data without space overhead. For exa
 Sending and receiving SC3 data model items
 ==========================================
 
-In SeisComP 3, HMB is disabled by default and can be enabled by adding the following options to ~/seiscomp3/etc/kernel.ini::
+In SeisComP 3, HMB is disabled by default and can be enabled by adding the following options to ~/seiscomp3/etc/kernel.cfg::
 
   hmb.enable = true
   hmb.port = 8000

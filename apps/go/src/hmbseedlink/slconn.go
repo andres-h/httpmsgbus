@@ -389,7 +389,7 @@ func (self *SeedlinkConnection) dataServe(h *hmb.Client) {
 			} else {
 				self.mutex.Lock()
 
-				if _, err = self.w.Write([]byte(fmt.Sprintf("SL%06X", m.Seq.Value%0xffffff))); err != nil {
+				if _, err = self.w.Write([]byte(fmt.Sprintf("SL%06X", m.Seq.Value&0xffffff))); err != nil {
 					self.Println(err)
 
 				} else if _, err = self.w.Write(data); err != nil {

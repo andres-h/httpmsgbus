@@ -2,7 +2,7 @@
 Introduction
 ************
 
-httpmsgbus (HMB) functions as a messaging service which runs over HTTP. It facilitates the transfer of objects, such as `SeisComP 3 <http://www.seiscomp3.org/>`_ data model items, but also other content, between a server and a client. Messages sent by one client can be received by multiple clients connected to the same bus. `JSON <http://json.org/>`_ and `BSON <http://bsonspec.org>`_ formats are used for communication.
+httpmsgbus (HMB) functions as a messaging service, which runs over HTTP. It facilitates the transfer of objects, such as `SeisComP 3 <http://www.seiscomp3.org/>`_ data model items, but also other content, between a server and a client. Messages sent by one client can be received by multiple clients connected to the same bus. `JSON <http://json.org/>`_ and `BSON <http://bsonspec.org>`_ formats are used for communication.
 
 A bus may have multiple *queues*. Order of messages within a queue is preserved. A queue may have multiple *topics*; topic name is simply an attribute of a message. A receiving client subscribes to one or more queues and tells which topics it is interested in.
 

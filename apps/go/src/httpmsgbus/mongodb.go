@@ -224,7 +224,14 @@ func (self *mdbRepository) insertTask(db *mgo.Database) {
 		err := db.C(d.cname).Insert(d.m)
 
 		if err != nil {
-			log.Println(err)
+			log.Println("insert:", err)
+			db.Session.Refresh()
+
+			err := db.C(d.cname).Insert(d.m)
+
+			if err != nil {
+				log.Println("insert (retry):", err)
+			}
 		}
 	}
 }
@@ -286,7 +293,11 @@ func (self *mdbRepository) queryTask(db *mgo.Database) {
 
 		err := iter.Close()
 
-		if err == nil {
+		if err != nil {
+			log.Println("query:", err)
+			db.Session.Refresh()
+
+		} else {
 			if !finished || (d.limit > 0 && count >= d.limit) {
 				err = ECONTINUE
 
@@ -313,14 +324,19 @@ func (self *mdbRepository) InitCollection(name string) (Collection, error) {
 	C := self.db.C(name)
 
 	if err := C.Create(&mgo.CollectionInfo{Capped: true, MaxBytes: self.collectionSize * 1024 * 1024}); err != nil {
+		self.db.Session.Refresh()
 		return nil, err
 	}
 
 	if err := C.EnsureIndex(mgo.Index{Key: []string{"seq"}, Unique: true}); err != nil {
+		self.db.Session.Refresh()
+		C.DropCollection()
 		return nil, err
 	}
 
 	if err := C.EnsureIndex(mgo.Index{Key: []string{"endtime"}}); err != nil {
+		self.db.Session.Refresh()
+		C.DropCollection()
 		return nil, err
 	}
 
@@ -369,7 +385,7 @@ type mdbRepositoryFactory struct {
 	waitGroup       *sync.WaitGroup // WaitGroup for shutdown
 }
 
-// NewMongoRepositoryFactory creates a new mdbRepositoryFactory mdbRepositoryFactory object.
+// NewMongoRepositoryFactory creates a new mdbRepositoryFactory object.
 func NewMongoRepositoryFactory(mgoSession *mgo.Session, collectionSize int, insertsParallel int, insertsQueued int, queriesParallel int, queriesQueued int, replyChanSize int) (RepositoryFactory, error) {
 	self := &mdbRepositoryFactory{
 		mgoSession:      mgoSession,

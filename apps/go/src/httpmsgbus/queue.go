@@ -25,11 +25,11 @@ import (
 
 var (
 	// Message.Topic must match this.
-	regexTopicName = regexp.MustCompile("^[\\w\\d_]*$")
+	regexTopicName = regexp.MustCompile("^[\\w]*$")
 
 	// Each element of OpenParamQueue.Topics must match this
 	// (metacharacters '!', '?' and '*' allowed).
-	regexTopicPattern = regexp.MustCompile("^!?[\\w\\d\\?\\*_]*$")
+	regexTopicPattern = regexp.MustCompile("^!?[\\w\\?\\*]*$")
 )
 
 // QueueSubscription holds the data that is shared between a Session and a
@@ -201,38 +201,60 @@ func NewQueue(name string, coll Collection, bufferSize int, queryLimit int, delt
 	}
 
 	if coll != nil {
-		if q, err := coll.Query(int64(-bufferSize), -1, Time{}, Time{}, nil, nil, nil, "", bufferSize, true); err != nil {
+		if d, err := coll.Query(-1, -1, Time{}, Time{}, nil, nil, nil, "", 1, true); err != nil {
 			return nil, err
 
 		} else {
-			for {
-				if m, err := q.Read(); err == ECONTINUE || err == io.EOF {
-					break
+			<-d.ReadNotify()
 
-				} else if err != nil {
-					return nil, err
+			if m, err := d.Read(); err == io.EOF {
+				return self, nil
 
-				} else if m == nil {
-					<-q.ReadNotify()
+			} else if err != nil {
+				return nil, err
 
-				} else {
-					if m.Seq.Value+1 > self.seq {
-						self.seq = m.Seq.Value + 1
-					}
+			} else {
+				self.seq = m.Seq.Value - int64(bufferSize)
+			}
+		}
 
-					self.ring.Put(m)
+		for {
+			if d, err := coll.Query(self.seq, -1, Time{}, Time{}, nil, nil, nil, "", queryLimit, true); err != nil {
+				return nil, err
 
-					ti, ok := self.topics[m.Topic]
+			} else {
+				for {
+					if m, err := d.Read(); err == io.EOF {
+						return self, nil
 
-					if !ok {
-						ti = &topicInfo{}
-						self.topics[m.Topic] = ti
-					}
+					} else if err == ECONTINUE {
+						break
 
-					if m.Seq.Value+1 > ti.endseq {
-						if !m.Endtime.IsZero() {
-							ti.endtime = m.Endtime
-							ti.endseq = m.Seq.Value + 1
+					} else if err != nil {
+						return nil, err
+
+					} else if m == nil {
+						<-d.ReadNotify()
+
+					} else {
+						if m.Seq.Value+1 > self.seq {
+							self.seq = m.Seq.Value + 1
+						}
+
+						self.ring.Put(m)
+
+						ti, ok := self.topics[m.Topic]
+
+						if !ok {
+							ti = &topicInfo{}
+							self.topics[m.Topic] = ti
+						}
+
+						if m.Seq.Value+1 > ti.endseq {
+							if !m.Endtime.IsZero() {
+								ti.endtime = m.Endtime
+								ti.endseq = m.Seq.Value + 1
+							}
 						}
 					}
 				}
@@ -534,6 +556,10 @@ func (self *Queue) Subscribe(cid string, notifier func(string, bool), topics []s
 
 		} else if sub.seq-self.seq < int64(self.delta)-0xffffff {
 			sub.seq += 0x1000000
+		}
+
+		if sub.seq < 0 {
+			sub.seq = 0
 		}
 
 	} else if sub.seq-self.seq > int64(self.delta) {

@@ -10,7 +10,7 @@ binary, but there seems to be a memory leak (ever growing cache) in the
 current version.
 
 In SeisComP 3, HMB is disabled by default and can be enabled by adding the
-following options to ~/seiscomp3/etc/kernel.ini:
+following options to ~/seiscomp3/etc/kernel.cfg:
 
 hmb.enable = true
 hmb.port = 8000

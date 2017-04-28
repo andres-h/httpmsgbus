@@ -59,7 +59,7 @@ class HMB(object):
 
                 return
 
-            except requests.exceptions.RequestException as e:
+            except (requests.exceptions.RequestException, OSError) as e:
                 if not fail:
                     self.__log_fn("error: " + str(e))
                     self.__log_fn("connection to message bus failed, retrying in %d seconds" % self.__retry_wait)
@@ -87,7 +87,7 @@ class HMB(object):
 
                 return
 
-            except requests.exceptions.RequestException as e:
+            except (requests.exceptions.RequestException, OSError) as e:
                 self.__log_fn("error: " + str(e))
 
             self.__sid = None
@@ -140,7 +140,7 @@ class HMB(object):
             except bson.errors.BSONError as e:
                 self.__log_fn("invalid data received: " + str(e))
 
-            except requests.exceptions.RequestException as e:
+            except (requests.exceptions.RequestException, OSError) as e:
                 self.__log_fn("error: " + str(e))
 
             self.__sid = None
