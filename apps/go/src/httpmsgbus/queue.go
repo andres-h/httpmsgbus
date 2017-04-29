@@ -215,6 +215,10 @@ func NewQueue(name string, coll Collection, bufferSize int, queryLimit int, delt
 
 			} else {
 				self.seq = m.Seq.Value - int64(bufferSize)
+
+				if self.seq < 0 {
+					self.seq = 0
+				}
 			}
 		}
 
