@@ -250,12 +250,14 @@ func (self *Master) InfoRequest(level int, seedname string, ip net.IP, w *bufio.
 func (self *Master) ApproveConnection(ip net.IP) bool {
 	ipstr := ip.String()
 
+	self.mutex.Lock()
+
 	if self.connsPerIP > 0 && self.ipCount[ipstr] >= self.connsPerIP {
+		self.mutex.Unlock()
 		self.Printf("maximum number of connections per IP exceeded (%s)", ip.String())
 		return false
 	}
 
-	self.mutex.Lock()
 	self.ipCount[ipstr]++
 	self.mutex.Unlock()
 
