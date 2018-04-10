@@ -295,29 +295,23 @@ func (self *InfoGenerator) infoLevel0() error {
 	if _, err := self.write([]byte("<?xml version=\"1.0\"?>")); err != nil {
 		return err
 
-	} else if _, err := self.write([]byte(fmt.Sprintf("<seedlink software=\"%s\" organization=\"%s\" started=\"%s\"",
+	} else if _, err := self.write([]byte(fmt.Sprintf("<seedlink software=\"%s\" organization=\"%s\" started=\"%s\">",
 		self.master.SoftwareId(),
 		self.master.Organization(),
 		self.master.Started().Format(TIMEFMT)))); err != nil {
 		return err
 
 	} else if self.level == 0 {
-		if _, err := self.write([]byte("/>")); err != nil {
+		if _, err := self.write([]byte("<capability name=\"dialup\"/><capability name=\"multistation\"/><capability name=\"window-extraction\"/><capability name=\"info:id\"/><capability name=\"info:capabilities\"/><capability name=\"info:stations\"/><capability name=\"info:streams\"/>")); err != nil {
 			return err
 		}
 
-	} else {
-		if _, err := self.write([]byte(">")); err != nil {
-			return err
-		}
+	} else if err := self.infoLevel1(); err != nil {
+		return err
+	}
 
-		if err := self.infoLevel1(); err != nil {
-			return err
-		}
-
-		if _, err := self.write([]byte("</seedlink>")); err != nil {
-			return err
-		}
+	if _, err := self.write([]byte("</seedlink>")); err != nil {
+		return err
 	}
 
 	return nil

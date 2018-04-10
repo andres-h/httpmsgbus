@@ -333,15 +333,15 @@ func (self *SeedlinkConnection) _INFO(arg string) {
 		level = 0
 		seedname = "INF"
 
+	case "CAPABILITIES":
+		level = 0
+		seedname = "INF"
+
 	case "STATIONS":
 		level = 1
 		seedname = "INF"
 
 	case "STREAMS":
-		level = 2
-		seedname = "INF"
-
-	case "ALL":
 		level = 2
 		seedname = "INF"
 
