@@ -283,6 +283,7 @@ func (self *Master) SeedlinkConnect(conn net.Conn) *SeedlinkConnection {
 	if !self.ApproveConnection(ip) {
 		// wait 1 sec to prevent the client from reconnecting too soon
 		time.Sleep(time.Second)
+		conn.Close()
 		return nil
 	}
 

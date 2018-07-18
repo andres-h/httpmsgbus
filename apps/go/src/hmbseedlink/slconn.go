@@ -374,12 +374,17 @@ func (self *SeedlinkConnection) dataServe(h *hmb.Client) {
 
 				if _, err := self.w.Write([]byte("END")); err != nil {
 					self.Println(err)
+					self.conn.Close()
 
 				} else if err := self.w.Flush(); err != nil {
 					self.Println(err)
+					self.conn.Close()
 				}
 
 				self.mutex.Unlock()
+
+			} else if err != hmb.ECANCELED {
+				self.conn.Close()
 			}
 
 		} else if m != nil && m.Type == "MSEED" {
@@ -391,15 +396,20 @@ func (self *SeedlinkConnection) dataServe(h *hmb.Client) {
 
 				if _, err = self.w.Write([]byte(fmt.Sprintf("SL%06X", m.Seq.Value&0xffffff))); err != nil {
 					self.Println(err)
+					self.conn.Close()
 
 				} else if _, err = self.w.Write(data); err != nil {
 					self.Println(err)
+					self.conn.Close()
 
 				} else if err = self.w.Flush(); err != nil {
 					self.Println(err)
+					self.conn.Close()
 				}
 
 				self.mutex.Unlock()
+
+				self.conn.SetReadDeadline(time.Now().Add(60 * time.Minute))
 			}
 		}
 	}
@@ -408,6 +418,7 @@ func (self *SeedlinkConnection) dataServe(h *hmb.Client) {
 func (self *SeedlinkConnection) infoServe(infoGen *InfoGenerator) {
 	if err := infoGen.Do(); err != nil {
 		self.Println(err)
+		self.conn.Close()
 	}
 }
 
@@ -430,7 +441,13 @@ func (self *SeedlinkConnection) start() {
 	scanner.Split(scanCommands)
 
 loop:
-	for scanner.Scan() {
+	for {
+		self.conn.SetReadDeadline(time.Now().Add(60 * time.Minute))
+
+		if !scanner.Scan() {
+			break
+		}
+
 		cmd := scanner.Text()
 
 		for _, rx := range commands {
