@@ -231,10 +231,44 @@ void Pick2HMB::initSession()
 // <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 void Pick2HMB::sendPick(DataModel::Pick* pick) {
 	try {
-		// if creation info is available, override author
-		pick->creationInfo().setAuthor(pick->creationInfo().agencyID());
+		if ( pick->evaluationMode() == DataModel::MANUAL )
+			return;
 	}
 	catch ( ... ) {
+		return;
+	}
+
+	DataModel::Stream *stream = Client::Inventory::Instance()->getStream(
+			pick->waveformID().networkCode(),
+			pick->waveformID().stationCode(),
+			pick->waveformID().locationCode(),
+			pick->waveformID().channelCode(),
+			pick->time().value());
+
+	if ( stream == NULL ) {
+		SEISCOMP_ERROR("cannot find stream %s.%s.%s.%s at %s",
+				pick->waveformID().networkCode().c_str(),
+				pick->waveformID().stationCode().c_str(),
+				pick->waveformID().locationCode().c_str(),
+				pick->waveformID().channelCode().c_str(),
+				Core::toString(pick->time().value()).c_str());
+
+		return;
+	}
+
+        try {
+		if ( stream->restricted() )
+			return;
+	}
+	catch ( ... ) {
+		SEISCOMP_ERROR("failed to get restricted status of %s.%s.%s.%s at %s",
+				pick->waveformID().networkCode().c_str(),
+				pick->waveformID().stationCode().c_str(),
+				pick->waveformID().locationCode().c_str(),
+				pick->waveformID().channelCode().c_str(),
+				Core::toString(pick->time().value()).c_str());
+
+		return;
 	}
 
 	DataModel::SensorLocation* loc = Client::Inventory::Instance()->getSensorLocation(
@@ -244,7 +278,7 @@ void Pick2HMB::sendPick(DataModel::Pick* pick) {
 			pick->time().value());
 
 	if ( loc == NULL ) {
-		SEISCOMP_ERROR("failed to get coordinates of %s %s %s at %s",
+		SEISCOMP_ERROR("cannot find location %s.%s.%s at %s",
 				pick->waveformID().networkCode().c_str(),
 				pick->waveformID().stationCode().c_str(),
 				pick->waveformID().locationCode().c_str(),
@@ -253,8 +287,28 @@ void Pick2HMB::sendPick(DataModel::Pick* pick) {
 		return;
 	}
 
-	double lat = loc->latitude();
-	double lon = loc->longitude();
+	double lat, lon;
+
+	try {
+		lat = loc->latitude();
+		lon = loc->longitude();
+	}
+	catch ( ... ) {
+		SEISCOMP_ERROR("failed to get coordinates of %s.%s.%s at %s",
+				pick->waveformID().networkCode().c_str(),
+				pick->waveformID().stationCode().c_str(),
+				pick->waveformID().locationCode().c_str(),
+				Core::toString(pick->time().value()).c_str());
+
+		return;
+	}
+
+	try {
+		// if creation info is available, override author
+		pick->creationInfo().setAuthor(pick->creationInfo().agencyID());
+	}
+	catch ( ... ) {
+	}
 
 	std::string data;
 
@@ -319,19 +373,16 @@ void Pick2HMB::sendPick(DataModel::Pick* pick) {
 // >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 void Pick2HMB::handleMessage(Core::Message* msg)
 {
-	if ( Core::DataMessage* dataMessage = Core::DataMessage::Cast(msg) )
-	{
+	if ( Core::DataMessage* dataMessage = Core::DataMessage::Cast(msg) ) {
 		for ( Core::DataMessage::iterator it = dataMessage->begin();
-				it != dataMessage->end(); ++it )
-		{
+				it != dataMessage->end(); ++it ) {
 			DataModel::Pick* pick = DataModel::Pick::Cast(*it);
 
 			if ( pick )
 				sendPick(pick);
 		}
 	}
-	else if ( DataModel::NotifierMessage* notifierMessage = DataModel::NotifierMessage::Cast(msg) )
-	{
+	else if ( DataModel::NotifierMessage* notifierMessage = DataModel::NotifierMessage::Cast(msg) ) {
 		for ( DataModel::NotifierMessage::iterator it = notifierMessage->begin();
 				it != notifierMessage->end(); ++it ) {
 			DataModel::Notifier* notifier = DataModel::Notifier::Cast(*it);
