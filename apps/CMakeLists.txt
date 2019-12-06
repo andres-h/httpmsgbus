@@ -1,1 +1,1 @@
-SUBDIRS(go pick2hmb)
+SUBDIRS(go pick2hmb export2hmb)

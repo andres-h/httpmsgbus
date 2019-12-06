@@ -12,8 +12,8 @@
 
 
 
-#ifndef __PICK2HMB_H__
-#define __PICK2HMB_H__
+#ifndef __EXPORT2HMB_H__
+#define __EXPORT2HMB_H__
 
 
 #include <string>
@@ -32,14 +32,14 @@ namespace Applications {
 
 
 // >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-class Pick2HMB : public Client::Application {
+class Export2HMB : public Client::Application {
 
 	// ----------------------------------------------------------------------
 	// X'struction
 	// ----------------------------------------------------------------------
 public:
-	Pick2HMB(int argc, char* argv[]);
-	~Pick2HMB();
+	Export2HMB(int argc, char* argv[]);
+	~Export2HMB();
 
 	// ------------------------------------------------------------------
 	// Private interface
@@ -52,7 +52,6 @@ private:
 
 	std::string bsonGetString(const bson_t *bson, const char *key);
 	void initSession();
-	void sendPick(DataModel::Pick* pick);
 
 	// ------------------------------------------------------------------
 	// Private implementation

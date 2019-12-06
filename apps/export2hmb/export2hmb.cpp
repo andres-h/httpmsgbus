@@ -12,8 +12,8 @@
 
 
 
-#define SEISCOMP_COMPONENT Pick2HMB
-#include "pick2hmb.h"
+#define SEISCOMP_COMPONENT Export2HMB
+#include "export2hmb.h"
 
 #include <vector>
 
@@ -27,6 +27,7 @@
 #include <seiscomp3/utils/files.h>
 #include <seiscomp3/client/inventory.h>
 #include <seiscomp3/datamodel/eventparameters.h>
+#include <seiscomp3/datamodel/amplitude.h>
 #include <seiscomp3/io/socket.h>
 #include <seiscomp3/io/httpsocket.h>
 #include <seiscomp3/io/httpsocket.ipp>
@@ -42,13 +43,13 @@ const int BSON_SIZE_MAX = 16*1024*1024;
 const int SOCKET_TIMEOUT = 60;
 
 // >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-Pick2HMB::Pick2HMB(int argc, char* argv[]) :
+Export2HMB::Export2HMB(int argc, char* argv[]) :
 	Client::Application(argc, argv)
 {
 	setMessagingEnabled(true);
-	setLoadStationsEnabled(true);
+	setDatabaseEnabled(false, false);
 	setPrimaryMessagingGroup(Client::Protocol::LISTENER_GROUP);
-	addMessagingSubscription("PICK");
+	addMessagingSubscription("IMPORT_GROUP");
 	setMessagingUsername(Util::basename(argv[0]));
 }
 // <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
@@ -57,14 +58,14 @@ Pick2HMB::Pick2HMB(int argc, char* argv[]) :
 
 
 // >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-Pick2HMB::~Pick2HMB() {}
+Export2HMB::~Export2HMB() {}
 // <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 
 
 
 
 // >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-bool Pick2HMB::init() {
+bool Export2HMB::init() {
 	if (!Application::init())
 		return false;
 
@@ -134,7 +135,7 @@ bool Pick2HMB::init() {
 
 
 // >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-void Pick2HMB::done() {
+void Export2HMB::done() {
 	Client::Application::done();
 }
 // <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
@@ -143,10 +144,10 @@ void Pick2HMB::done() {
 
 
 // >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-void Pick2HMB::createCommandLineDescription() {
+void Export2HMB::createCommandLineDescription() {
 	Application::createCommandLineDescription();
-	commandline().addGroup("pick2hmb");
-	commandline().addOption("pick2hmb", "sink,o", "Sink HMB", static_cast<std::string*>(NULL));
+	commandline().addGroup("export2hmb");
+	commandline().addOption("export2hmb", "sink,o", "Sink HMB", static_cast<std::string*>(NULL));
 }
 // <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 
@@ -154,7 +155,7 @@ void Pick2HMB::createCommandLineDescription() {
 
 
 // >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-std::string Pick2HMB::bsonGetString(const bson_t *bson, const char *key)
+std::string Export2HMB::bsonGetString(const bson_t *bson, const char *key)
 {
 	bson_iter_t iter;
 	if ( bson_iter_init_find(&iter, bson, key) ) {
@@ -176,7 +177,7 @@ std::string Pick2HMB::bsonGetString(const bson_t *bson, const char *key)
 
 
 // >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-void Pick2HMB::initSession()
+void Export2HMB::initSession()
 {
 	IO::HttpSocket<IO::Socket> sock;
 
@@ -225,116 +226,34 @@ void Pick2HMB::initSession()
 
 
 
-// <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
-void Pick2HMB::sendPick(DataModel::Pick* pick) {
-	try {
-		if ( pick->evaluationMode() == DataModel::MANUAL )
-			return;
-	}
-	catch ( ... ) {
-		return;
-	}
-
-	DataModel::Stream *stream = Client::Inventory::Instance()->getStream(
-			pick->waveformID().networkCode(),
-			pick->waveformID().stationCode(),
-			pick->waveformID().locationCode(),
-			pick->waveformID().channelCode(),
-			pick->time().value());
-
-	if ( stream == NULL ) {
-		SEISCOMP_ERROR("cannot find stream %s.%s.%s.%s at %s",
-				pick->waveformID().networkCode().c_str(),
-				pick->waveformID().stationCode().c_str(),
-				pick->waveformID().locationCode().c_str(),
-				pick->waveformID().channelCode().c_str(),
-				Core::toString(pick->time().value()).c_str());
-
-		return;
-	}
-
-        try {
-		if ( stream->restricted() )
-			return;
-	}
-	catch ( ... ) {
-		SEISCOMP_ERROR("failed to get restricted status of %s.%s.%s.%s at %s",
-				pick->waveformID().networkCode().c_str(),
-				pick->waveformID().stationCode().c_str(),
-				pick->waveformID().locationCode().c_str(),
-				pick->waveformID().channelCode().c_str(),
-				Core::toString(pick->time().value()).c_str());
-
-		return;
-	}
-
-	DataModel::SensorLocation* loc = Client::Inventory::Instance()->getSensorLocation(
-			pick->waveformID().networkCode(),
-			pick->waveformID().stationCode(),
-			pick->waveformID().locationCode(),
-			pick->time().value());
-
-	if ( loc == NULL ) {
-		SEISCOMP_ERROR("cannot find location %s.%s.%s at %s",
-				pick->waveformID().networkCode().c_str(),
-				pick->waveformID().stationCode().c_str(),
-				pick->waveformID().locationCode().c_str(),
-				Core::toString(pick->time().value()).c_str());
-
-		return;
-	}
-
-	double lat, lon;
-
-	try {
-		lat = loc->latitude();
-		lon = loc->longitude();
-	}
-	catch ( ... ) {
-		SEISCOMP_ERROR("failed to get coordinates of %s.%s.%s at %s",
-				pick->waveformID().networkCode().c_str(),
-				pick->waveformID().stationCode().c_str(),
-				pick->waveformID().locationCode().c_str(),
-				Core::toString(pick->time().value()).c_str());
-
-		return;
-	}
-
-	try {
-		// if creation info is available, override author
-		pick->creationInfo().setAuthor(pick->creationInfo().agencyID());
-	}
-	catch ( ... ) {
-	}
-
+// >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+void Export2HMB::handleMessage(Core::Message* msg)
+{
 	std::string data;
 
 	{
 		boost::iostreams::stream_buffer<boost::iostreams::back_insert_device<std::string> > buf(data);
 		IO::BSONArchive ar(&buf, false, -1);
-		ar & NAMED_OBJECT_HINT("latitude", lat, Core::Archive::STATIC_TYPE);
-		ar & NAMED_OBJECT_HINT("longitude", lon, Core::Archive::STATIC_TYPE);
-		ar & NAMED_OBJECT_HINT("pick", pick, Core::Archive::STATIC_TYPE);
+		ar << msg;
 
 		if ( !ar.success() )
-			throw Core::GeneralException("failed to serialize pick");
+			throw Core::GeneralException("failed to serialize message");
 	}
 
 	bson_t bdata = BSON_INITIALIZER;
 
 	if ( !bson_init_static(&bdata, (const uint8_t*) data.data(), data.size()) )
-		throw Core::GeneralException("failed to serialize pick");
-
-	std::string timestr = Core::toString(pick->time().value());
+		throw Core::GeneralException("failed to serialize message");
 
 	bson_t bmsg = BSON_INITIALIZER;
-	bson_append_utf8(&bmsg, "type", -1, "PICK", -1);
-	bson_append_utf8(&bmsg, "queue", -1, "PICK", -1);
-	bson_append_utf8(&bmsg, "starttime", -1, timestr.c_str(), -1);
-	bson_append_utf8(&bmsg, "endtime", -1, timestr.c_str(), -1);
+	bson_append_utf8(&bmsg, "type", -1, "SC3", -1);
+	bson_append_utf8(&bmsg, "queue", -1, "SC3MSG", -1);
+	bson_append_utf8(&bmsg, "topic", -1, "IMPORT_GROUP", -1);
+	bson_append_int32(&bmsg, "scMessageType", -1, 1);
+	bson_append_int32(&bmsg, "scContentType", -1, 5);
 	bson_append_document(&bmsg, "data", -1, &bdata);
 
-	std::string msg((char *) bson_get_data(&bmsg), bmsg.len);
+	std::string msgdata((char *) bson_get_data(&bmsg), bmsg.len);
 	bson_destroy(&bmsg);
 
 	IO::HttpSocket<IO::Socket> sock;
@@ -347,7 +266,7 @@ void Pick2HMB::sendPick(DataModel::Pick* pick) {
 			sock.setTimeout(SOCKET_TIMEOUT);
 			sock.startTimer();
 			sock.open(_serverHost, _user, _password);
-			sock.httpPost(_serverPath + "send/" + _sid, msg);
+			sock.httpPost(_serverPath + "send/" + _sid, msgdata);
 			sock.httpRead(1024);
 			sock.close();
 			break;
@@ -360,41 +279,6 @@ void Pick2HMB::sendPick(DataModel::Pick* pick) {
 
 			_sid = "";
 		}
-	}
-}
-// <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
-
-
-
-
-// >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-void Pick2HMB::handleMessage(Core::Message* msg)
-{
-	if ( Core::DataMessage* dataMessage = Core::DataMessage::Cast(msg) ) {
-		for ( Core::DataMessage::iterator it = dataMessage->begin();
-				it != dataMessage->end(); ++it ) {
-			DataModel::Pick* pick = DataModel::Pick::Cast(*it);
-
-			if ( pick )
-				sendPick(pick);
-		}
-	}
-	else if ( DataModel::NotifierMessage* notifierMessage = DataModel::NotifierMessage::Cast(msg) ) {
-		for ( DataModel::NotifierMessage::iterator it = notifierMessage->begin();
-				it != notifierMessage->end(); ++it ) {
-			DataModel::Notifier* notifier = DataModel::Notifier::Cast(*it);
-
-			if ( notifier->operation() == DataModel::OP_ADD || notifier->operation() == DataModel::OP_UPDATE ) {
-				DataModel::Pick* pick = DataModel::Pick::Cast(notifier->object());
-
-				if ( pick )
-					sendPick(pick);
-			}
-		}
-	}
-	else {
-		// Unknown message
-		return;
 	}
 }
 // <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<

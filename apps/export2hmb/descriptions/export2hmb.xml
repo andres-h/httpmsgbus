@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<seiscomp>
+	<module name="export2hmb" category="Messaging" standalone="true">
+		<description>Export to httpmsgbus</description>
+		<configuration>
+			<parameter name="sink" type="string">
+				<description>
+				Address of HMB to send messages to.
+				</description>
+			</parameter>
+		</configuration>
+	</module>
+</seiscomp>
