@@ -54,15 +54,15 @@ Sending and receiving binary objects
 
 The BSON format can be used to embed binary data without space overhead. For example, the "eventpush" program (available in the "hmb-clients" repository) uses HMB to send messages containing compressed XML data. Such messages can be received using the "qmlreceiver" program.
 
-Sending and receiving SC3 data model items
-==========================================
+Sending and receiving SeisComP data model items
+===============================================
 
-In SeisComP 3, HMB is disabled by default and can be enabled by adding the following options to ~/seiscomp3/etc/kernel.cfg::
+In SeisComP, HMB is disabled by default and can be enabled by adding the following options to ~/seiscomp/etc/kernel.cfg::
 
   hmb.enable = true
   hmb.port = 8000
 
-Thereafter HMB can be configured with "scconfig" and started like any other SC3 module::
+Thereafter HMB can be configured with "scconfig" and started like any other SeisComP module::
 
   $ seiscomp start httpmsgbus
 
@@ -75,12 +75,12 @@ Likewise, messages can be received from HMB instead of Spread::
 
   $ seiscomp exec scmm -H hmb://localhost:8000/test --console 1 -v
 
-The "pick2hmb" program, included in the distribution, can be studied as a C++ example of sending SC3 objects to HMB.
+The "pick2hmb" program, included in the distribution, can be studied as a C++ example of sending SeisComP objects to HMB.
 
 Sending and receiving waveform data
 ===================================
 
-The wavefeed SC3 module can be started to feed waveform data to HMB instead of a local SeedLink server.
+The wavefeed SeisComP module can be started to feed waveform data to HMB instead of a local SeedLink server.
 
 ::
 

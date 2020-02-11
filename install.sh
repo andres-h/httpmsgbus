@@ -12,13 +12,13 @@ go get -u github.com/golang/protobuf/proto
 go get -u gopkg.in/mgo.v2
 go get -u gopkg.in/tylerb/graceful.v1
 go install httpmsgbus hmbseedlink wavefeed
-mkdir -p ~/seiscomp3/sbin
-cp -p ../bin/* ~/seiscomp3/sbin
-mkdir -p ~/seiscomp3/etc/init
-cp -p */config/* ~/seiscomp3/etc/init
-mkdir -p ~/seiscomp3/etc/descriptions
-cp -p */descriptions/* ~/seiscomp3/etc/descriptions
-mkdir -p ~/seiscomp3/lib/python/hmb
-cp -p ../../../libs/python/hmb/* ~/seiscomp3/lib/python/hmb
-echo httpmsgbus successfully installed as ~/seiscomp3/sbin/httpmsgbus
+mkdir -p ~/seiscomp/sbin
+cp -p ../bin/* ~/seiscomp/sbin
+mkdir -p ~/seiscomp/etc/init
+cp -p */config/* ~/seiscomp/etc/init
+mkdir -p ~/seiscomp/etc/descriptions
+cp -p */descriptions/* ~/seiscomp/etc/descriptions
+mkdir -p ~/seiscomp/lib/python/hmb
+cp -p ../../../libs/python/hmb/* ~/seiscomp/lib/python/hmb
+echo httpmsgbus successfully installed as ~/seiscomp/sbin/httpmsgbus
 

@@ -11,7 +11,7 @@ Compiling and installing HMB
 
 * Install PCRE development package for your Linux distribution (usually named pcre-devel or libpcre3-dev). If you are on a non-Linux platform or want to create a portable binary for Linux, it is possible to use the standard Go regexp package instead of PCRE by removing the "vendor" directory in HMB source. The standard Go regexp package may have a memory leak in its current version, so keep an eye on the memory consumption if you use it.
 
-* Either copy HMB source code to SC3 source tree and use CMake or simply call the "install.sh" script included.
+* Either copy HMB source code to SeisComP source tree and use CMake or simply call the "install.sh" script included.
 
 Configuring reverse proxy
 =========================

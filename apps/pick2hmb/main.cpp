@@ -11,7 +11,7 @@
  ***************************************************************************/
 
 
-#include <seiscomp3/system/environment.h>
+#include <seiscomp/system/environment.h>
 #include "pick2hmb.h"
 
 

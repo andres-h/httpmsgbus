@@ -20,7 +20,7 @@
 #include <map>
 #include <boost/thread/thread.hpp>
 
-#include <seiscomp3/client/application.h>
+#include <seiscomp/client/application.h>
 
 extern "C" {
 	#include "bson/bson.h"

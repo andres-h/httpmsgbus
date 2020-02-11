@@ -27,7 +27,7 @@ Function
 Function defines the purpose of the server. The following functions are defined:
 
 SC3MASTER
-  SC3 master messaging server
+  SeisComP master messaging server
 
 WAVESERVER
   Waveform server

@@ -1,7 +1,7 @@
 from __future__ import print_function
 import os, re, sys
-import seiscomp3.Kernel, seiscomp3.Config, seiscomp3.System
-import seiscomp3.DataModel, seiscomp3.IO
+import seiscomp.kernel, seiscomp.config, seiscomp.system
+import seiscomp.datamodel, seiscomp.io
 import bson
 from hmb.client import HMB
 
@@ -15,24 +15,24 @@ def loadDatabase(dbUrl):
     """
     m = re.match("(?P<dbDriverName>^.*):\/\/(?P<dbAddress>.+?:.+?@.+?\/.+$)", dbUrl)
     if not m:
-        raise Exception("error in parsing SC3 DB URL")
+        raise Exception("error in parsing SeisComP DB URL")
     db = m.groupdict()
     try:
-        registry = seiscomp3.Client.PluginRegistry.Instance()
+        registry = seiscomp.Client.PluginRegistry.Instance()
         registry.addPluginName("db" + db["dbDriverName"])
         registry.loadPlugins()
     except Exception, e:
         raise(e) ### "Cannot load database driver: %s" % e)
-    dbDriver = seiscomp3.IO.DatabaseInterface.Create(db["dbDriverName"])
+    dbDriver = seiscomp.io.DatabaseInterface.Create(db["dbDriverName"])
     if dbDriver is None:
         raise Exception("Cannot find database driver " + db["dbDriverName"])
     if not dbDriver.connect(db["dbAddress"]):
         raise Exception("Cannot connect to database at " + db["dbAddress"])
-    dbQuery = seiscomp3.DataModel.DatabaseQuery(dbDriver)
+    dbQuery = seiscomp.datamodel.DatabaseQuery(dbDriver)
     if dbQuery is None:
         raise Exception("Cannot get DB query object")
     log("loading inventory from database ...", end="")
-    inventory = seiscomp3.DataModel.Inventory()
+    inventory = seiscomp.datamodel.Inventory()
     dbQuery.loadNetworks(inventory)
     for ni in xrange(inventory.networkCount()):
         dbQuery.loadStations(inventory.network(ni))
@@ -107,16 +107,16 @@ def collectParams(container):
     for i in range(container.parameterCount()):
         p = container.parameter(i)
 
-        if p.symbol.stage == seiscomp3.System.Environment.CS_UNDEFINED:
+        if p.symbol.stage == seiscomp.system.Environment.CS_UNDEFINED:
             continue
 
         params[p.variableName] = p.symbol.values
 
     return params
 
-class Module(seiscomp3.Kernel.Module):
+class Module(seiscomp.kernel.Module):
     def __init__(self, env):
-        seiscomp3.Kernel.Module.__init__(self, env, env.moduleName(__file__))
+        seiscomp.kernel.Module.__init__(self, env, env.moduleName(__file__))
         self.rcdir = os.path.join(self.env.SEISCOMP_ROOT, "var", "lib", "rc")
         self.seedlink_station_descr = {}
 
@@ -133,10 +133,10 @@ class Module(seiscomp3.Kernel.Module):
         if not self.hmbEnable:
             return 0
 
-        seiscomp3.Kernel.Module.start(self)
+        seiscomp.kernel.Module.start(self)
 
     def _readConfig(self):
-        cfg = seiscomp3.Config.Config()
+        cfg = seiscomp.config.Config()
 
         # Defaults Global + App Cfg
         cfg.readConfig(os.path.join(self.env.SEISCOMP_ROOT, "etc", "defaults", "global.cfg"))
@@ -147,8 +147,8 @@ class Module(seiscomp3.Kernel.Module):
         cfg.readConfig(os.path.join(self.env.SEISCOMP_ROOT, "etc", self.name + ".cfg"))
 
         # User Global + App Cfg
-        cfg.readConfig(os.path.join(os.environ['HOME'], ".seiscomp3", "global.cfg"))
-        cfg.readConfig(os.path.join(os.environ['HOME'], ".seiscomp3", self.name + ".cfg"))
+        cfg.readConfig(os.path.join(os.environ['HOME'], ".seiscomp", "global.cfg"))
+        cfg.readConfig(os.path.join(os.environ['HOME'], ".seiscomp", self.name + ".cfg"))
 
         return cfg
 
@@ -173,7 +173,7 @@ class Module(seiscomp3.Kernel.Module):
     def _getStationDescription(self, net, sta):
         # Supply station description:
         # 1. try getting station description from a database
-        # 2. read station description from seiscomp3/var/lib/rc/station_NET_STA
+        # 2. read station description from seiscomp/var/lib/rc/station_NET_STA
         # 3. if not set, use the station code
 
         description = ""
@@ -186,7 +186,7 @@ class Module(seiscomp3.Kernel.Module):
 
         if len(description) == 0:
             try:
-                rc = seiscomp3.Config.Config()
+                rc = seiscomp.config.Config()
                 rc.readConfig(os.path.join(self.rcdir, "station_%s_%s" % (net, sta)))
                 description = rc.getString("description")
             except Exception, e:
@@ -211,7 +211,7 @@ class Module(seiscomp3.Kernel.Module):
         keydir = os.path.join(self.env.SEISCOMP_ROOT, "etc", "key", "seedlink")
 
         # Load definitions of the configuration schema
-        defs = seiscomp3.System.SchemaDefinitions()
+        defs = seiscomp.system.SchemaDefinitions()
         if defs.load(descdir) == False:
             log("could not read descriptions")
             return False
@@ -222,7 +222,7 @@ class Module(seiscomp3.Kernel.Module):
 
         # Create a model from the schema and read its configuration including
         # all bindings.
-        model = seiscomp3.System.Model()
+        model = seiscomp.system.Model()
         model.create(defs)
         model.readConfig()
 

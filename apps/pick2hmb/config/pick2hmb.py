@@ -1,8 +1,8 @@
-import seiscomp3.Kernel
+import seiscomp.kernel
 
-class Module(seiscomp3.Kernel.Module):
+class Module(seiscomp.kernel.Module):
   def __init__(self, env):
-    seiscomp3.Kernel.Module.__init__(self, env, env.moduleName(__file__))
+    seiscomp.kernel.Module.__init__(self, env, env.moduleName(__file__))
 
 
   def supportsAliases(self):

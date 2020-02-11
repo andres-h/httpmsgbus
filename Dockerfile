@@ -23,4 +23,4 @@ RUN /app/install.sh
 # configure entrypoint
 WORKDIR /home/httpmsgbus_user
 EXPOSE 8000
-ENTRYPOINT [ "seiscomp3/sbin/httpmsgbus" ]
+ENTRYPOINT [ "seiscomp/sbin/httpmsgbus" ]

@@ -1,9 +1,9 @@
 import os
-import seiscomp3.Kernel, seiscomp3.Config
+import seiscomp.kernel, seiscomp.config
 
-class Module(seiscomp3.Kernel.Module):
+class Module(seiscomp.kernel.Module):
     def __init__(self, env):
-        seiscomp3.Kernel.Module.__init__(self, env, env.moduleName(__file__))
+        seiscomp.kernel.Module.__init__(self, env, env.moduleName(__file__))
 
         # Default values
         self.hmbEnable = False
@@ -18,10 +18,10 @@ class Module(seiscomp3.Kernel.Module):
         if not self.hmbEnable:
             return 0
 
-        seiscomp3.Kernel.Module.start(self)
+        seiscomp.kernel.Module.start(self)
 
     def _readConfig(self):
-        cfg = seiscomp3.Config.Config()
+        cfg = seiscomp.config.Config()
 
         # Defaults Global + App Cfg
         cfg.readConfig(os.path.join(self.env.SEISCOMP_ROOT, "etc", "defaults", "global.cfg"))
@@ -32,8 +32,8 @@ class Module(seiscomp3.Kernel.Module):
         cfg.readConfig(os.path.join(self.env.SEISCOMP_ROOT, "etc", self.name + ".cfg"))
 
         # User Global + App Cfg
-        cfg.readConfig(os.path.join(os.environ['HOME'], ".seiscomp3", "global.cfg"))
-        cfg.readConfig(os.path.join(os.environ['HOME'], ".seiscomp3", self.name + ".cfg"))
+        cfg.readConfig(os.path.join(os.environ['HOME'], ".seiscomp", "global.cfg"))
+        cfg.readConfig(os.path.join(os.environ['HOME'], ".seiscomp", self.name + ".cfg"))
 
         return cfg
 

@@ -17,22 +17,22 @@
 
 #include <vector>
 
-#include <seiscomp3/logging/log.h>
-#include <seiscomp3/core/strings.h>
-#include <seiscomp3/core/system.h>
-#include <seiscomp3/system/environment.h>
-#include <seiscomp3/core/datamessage.h>
-#include <seiscomp3/utils/timer.h>
-#include <seiscomp3/core/datetime.h>
-#include <seiscomp3/utils/files.h>
-#include <seiscomp3/client/inventory.h>
-#include <seiscomp3/datamodel/eventparameters.h>
-#include <seiscomp3/datamodel/amplitude.h>
-#include <seiscomp3/io/socket.h>
-#include <seiscomp3/io/httpsocket.h>
-#include <seiscomp3/io/httpsocket.ipp>
+#include <seiscomp/logging/log.h>
+#include <seiscomp/core/strings.h>
+#include <seiscomp/core/system.h>
+#include <seiscomp/system/environment.h>
+#include <seiscomp/core/datamessage.h>
+#include <seiscomp/utils/timer.h>
+#include <seiscomp/core/datetime.h>
+#include <seiscomp/utils/files.h>
+#include <seiscomp/client/inventory.h>
+#include <seiscomp/datamodel/eventparameters.h>
+#include <seiscomp/datamodel/amplitude.h>
+#include <seiscomp/io/socket.h>
+#include <seiscomp/io/httpsocket.h>
+#include <seiscomp/io/httpsocket.ipp>
 
-#include <seiscomp3/io/archive/bsonarchive.h>
+#include <seiscomp/io/archive/bsonarchive.h>
 #include <boost/iostreams/stream.hpp>
 #include <boost/iostreams/device/back_inserter.hpp>
 

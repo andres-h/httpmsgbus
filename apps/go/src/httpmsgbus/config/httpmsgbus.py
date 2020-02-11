@@ -1,9 +1,9 @@
 import os, resource
-import seiscomp3.Kernel, seiscomp3.Config
+import seiscomp.kernel, seiscomp.config
 
-class Module(seiscomp3.Kernel.CoreModule):
+class Module(seiscomp.kernel.CoreModule):
     def __init__(self, env):
-        seiscomp3.Kernel.CoreModule.__init__(self, env, env.moduleName(__file__))
+        seiscomp.kernel.CoreModule.__init__(self, env, env.moduleName(__file__))
 
         # Increase kill timeout to 40 seconds
         self.killTimeout = 40
@@ -22,10 +22,10 @@ class Module(seiscomp3.Kernel.CoreModule):
             print "[kernel] HMB is disabled by config"
             return 0
 
-        seiscomp3.Kernel.CoreModule.start(self)
+        seiscomp.kernel.CoreModule.start(self)
 
     def _readConfig(self):
-        cfg = seiscomp3.Config.Config()
+        cfg = seiscomp.config.Config()
 
         # Defaults Global + App Cfg
         cfg.readConfig(os.path.join(self.env.SEISCOMP_ROOT, "etc", "defaults", "global.cfg"))
@@ -36,8 +36,8 @@ class Module(seiscomp3.Kernel.CoreModule):
         cfg.readConfig(os.path.join(self.env.SEISCOMP_ROOT, "etc", self.name + ".cfg"))
 
         # User Global + App Cfg
-        cfg.readConfig(os.path.join(os.environ['HOME'], ".seiscomp3", "global.cfg"))
-        cfg.readConfig(os.path.join(os.environ['HOME'], ".seiscomp3", self.name + ".cfg"))
+        cfg.readConfig(os.path.join(os.environ['HOME'], ".seiscomp", "global.cfg"))
+        cfg.readConfig(os.path.join(os.environ['HOME'], ".seiscomp", self.name + ".cfg"))
 
         return cfg
 
