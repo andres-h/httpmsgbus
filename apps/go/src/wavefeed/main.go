@@ -28,7 +28,7 @@ import (
 	"time"
 )
 
-const VERSION = "0.1 (2016.099)"
+const VERSION = "0.1 (2020.042)"
 
 const (
 	PLUGINFD        = 63
@@ -37,6 +37,8 @@ const (
 	SYSLOG_FACILITY = syslog.LOG_LOCAL0
 	SYSLOG_SEVERITY = syslog.LOG_NOTICE
 )
+
+var regexTopicName = regexp.MustCompile("^[\\w]*$")
 
 var log = _log.New(os.Stdout, "", _log.LstdFlags)
 
@@ -225,6 +227,11 @@ func (self *Worker) readPacket() error {
 
 		if t := etime.Unix(); t < 0 || t > 253402297199 {
 			log.Println("WAVE_"+net+"_"+sta, topic, seq, "invalid endtime:", etime)
+			return nil
+		}
+
+		if !regexTopicName.MatchString(topic) {
+			log.Println("WAVE_"+net+"_"+sta, seq, "invalid topic:", topic)
 			return nil
 		}
 
