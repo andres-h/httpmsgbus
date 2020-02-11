@@ -27,6 +27,7 @@
 #include <seiscomp3/utils/files.h>
 #include <seiscomp3/client/inventory.h>
 #include <seiscomp3/datamodel/eventparameters.h>
+#include <seiscomp3/datamodel/amplitude.h>
 #include <seiscomp3/io/socket.h>
 #include <seiscomp3/io/httpsocket.h>
 #include <seiscomp3/io/httpsocket.ipp>
@@ -49,6 +50,7 @@ Pick2HMB::Pick2HMB(int argc, char* argv[]) :
 	setLoadStationsEnabled(true);
 	setPrimaryMessagingGroup(Client::Protocol::LISTENER_GROUP);
 	addMessagingSubscription("PICK");
+	addMessagingSubscription("AMPLITUDE");
 	setMessagingUsername(Util::basename(argv[0]));
 }
 // <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
@@ -367,6 +369,144 @@ void Pick2HMB::sendPick(DataModel::Pick* pick) {
 
 
 
+// <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+void Pick2HMB::sendAmplitude(DataModel::Amplitude* amp) {
+	try {
+		if ( amp->evaluationMode() == DataModel::MANUAL )
+			return;
+	}
+	catch ( ... ) {
+		/* return; */
+	}
+
+	DataModel::Stream *stream = Client::Inventory::Instance()->getStream(
+			amp->waveformID().networkCode(),
+			amp->waveformID().stationCode(),
+			amp->waveformID().locationCode(),
+			amp->waveformID().channelCode(),
+			amp->timeWindow().reference());
+
+	if ( stream == NULL ) {
+		SEISCOMP_ERROR("cannot find stream %s.%s.%s.%s at %s",
+				amp->waveformID().networkCode().c_str(),
+				amp->waveformID().stationCode().c_str(),
+				amp->waveformID().locationCode().c_str(),
+				amp->waveformID().channelCode().c_str(),
+				Core::toString(amp->timeWindow().reference()).c_str());
+
+		return;
+	}
+
+        try {
+		if ( stream->restricted() )
+			return;
+	}
+	catch ( ... ) {
+		SEISCOMP_ERROR("failed to get restricted status of %s.%s.%s.%s at %s",
+				amp->waveformID().networkCode().c_str(),
+				amp->waveformID().stationCode().c_str(),
+				amp->waveformID().locationCode().c_str(),
+				amp->waveformID().channelCode().c_str(),
+				Core::toString(amp->timeWindow().reference()).c_str());
+
+		return;
+	}
+
+	DataModel::SensorLocation* loc = Client::Inventory::Instance()->getSensorLocation(
+			amp->waveformID().networkCode(),
+			amp->waveformID().stationCode(),
+			amp->waveformID().locationCode(),
+			amp->timeWindow().reference());
+
+	if ( loc == NULL ) {
+		SEISCOMP_ERROR("cannot find location %s.%s.%s at %s",
+				amp->waveformID().networkCode().c_str(),
+				amp->waveformID().stationCode().c_str(),
+				amp->waveformID().locationCode().c_str(),
+				Core::toString(amp->timeWindow().reference()).c_str());
+
+		return;
+	}
+
+	try {
+		loc->latitude();
+		loc->longitude();
+	}
+	catch ( ... ) {
+		SEISCOMP_ERROR("failed to get coordinates of %s.%s.%s at %s",
+				amp->waveformID().networkCode().c_str(),
+				amp->waveformID().stationCode().c_str(),
+				amp->waveformID().locationCode().c_str(),
+				Core::toString(amp->timeWindow().reference()).c_str());
+
+		return;
+	}
+
+	try {
+		// if creation info is available, override author
+		amp->creationInfo().setAuthor(amp->creationInfo().agencyID());
+	}
+	catch ( ... ) {
+	}
+
+	std::string data;
+
+	{
+		boost::iostreams::stream_buffer<boost::iostreams::back_insert_device<std::string> > buf(data);
+		IO::BSONArchive ar(&buf, false, -1);
+		ar & NAMED_OBJECT_HINT("amplitude", amp, Core::Archive::STATIC_TYPE);
+
+		if ( !ar.success() )
+			throw Core::GeneralException("failed to serialize amplitude");
+	}
+
+	bson_t bdata = BSON_INITIALIZER;
+
+	if ( !bson_init_static(&bdata, (const uint8_t*) data.data(), data.size()) )
+		throw Core::GeneralException("failed to serialize amplitude");
+
+	std::string timestr = Core::toString(amp->timeWindow().reference());
+
+	bson_t bmsg = BSON_INITIALIZER;
+	bson_append_utf8(&bmsg, "type", -1, "AMPLITUDE", -1);
+	bson_append_utf8(&bmsg, "queue", -1, "PICK", -1);
+	bson_append_utf8(&bmsg, "starttime", -1, timestr.c_str(), -1);
+	bson_append_utf8(&bmsg, "endtime", -1, timestr.c_str(), -1);
+	bson_append_document(&bmsg, "data", -1, &bdata);
+
+	std::string msg((char *) bson_get_data(&bmsg), bmsg.len);
+	bson_destroy(&bmsg);
+
+	IO::HttpSocket<IO::Socket> sock;
+
+	for ( int retry = 0; retry < 2; ++retry ) {
+		try {
+			if ( _sid.length() == 0 )
+				initSession();
+
+			sock.setTimeout(SOCKET_TIMEOUT);
+			sock.startTimer();
+			sock.open(_serverHost, _user, _password);
+			sock.httpPost(_serverPath + "send/" + _sid, msg);
+			sock.httpRead(1024);
+			sock.close();
+			break;
+		}
+		catch ( Core::GeneralException &e ) {
+			SEISCOMP_ERROR("%s", e.what());
+
+			if ( sock.isOpen() )
+				sock.close();
+
+			_sid = "";
+		}
+	}
+}
+// <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+
+
+
+
 // >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 void Pick2HMB::handleMessage(Core::Message* msg)
 {
@@ -375,8 +515,15 @@ void Pick2HMB::handleMessage(Core::Message* msg)
 				it != dataMessage->end(); ++it ) {
 			DataModel::Pick* pick = DataModel::Pick::Cast(*it);
 
-			if ( pick )
+			if ( pick ) {
 				sendPick(pick);
+			}
+			else {
+				DataModel::Amplitude* amp = DataModel::Amplitude::Cast(*it);
+
+				if ( amp )
+					sendAmplitude(amp);
+			}
 		}
 	}
 	else if ( DataModel::NotifierMessage* notifierMessage = DataModel::NotifierMessage::Cast(msg) ) {
@@ -387,8 +534,15 @@ void Pick2HMB::handleMessage(Core::Message* msg)
 			if ( notifier->operation() == DataModel::OP_ADD || notifier->operation() == DataModel::OP_UPDATE ) {
 				DataModel::Pick* pick = DataModel::Pick::Cast(notifier->object());
 
-				if ( pick )
+				if ( pick ) {
 					sendPick(pick);
+				}
+				else {
+					DataModel::Amplitude* amp = DataModel::Amplitude::Cast(notifier->object());
+
+					if ( amp )
+						sendAmplitude(amp);
+				}
 			}
 		}
 	}

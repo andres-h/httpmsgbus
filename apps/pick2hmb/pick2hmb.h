@@ -53,6 +53,7 @@ private:
 	std::string bsonGetString(const bson_t *bson, const char *key);
 	void initSession();
 	void sendPick(DataModel::Pick* pick);
+	void sendAmplitude(DataModel::Amplitude* amp);
 
 	// ------------------------------------------------------------------
 	// Private implementation
