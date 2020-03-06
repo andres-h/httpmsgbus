@@ -2,11 +2,13 @@ SET(EXPORT2HMB_TARGET export2hmb)
 
 SET(
     EXPORT2HMB_HEADERS
+    imexmessage.h
     export2hmb.h
 )
 
 SET(
     EXPORT2HMB_SOURCES
+    imexmessage.cpp
     export2hmb.cpp
     main.cpp
 )

@@ -13,6 +13,7 @@
 
 
 #define SEISCOMP_COMPONENT Export2HMB
+#include "imexmessage.h"
 #include "export2hmb.h"
 
 #include <vector>
@@ -234,7 +235,11 @@ void Export2HMB::handleMessage(Core::Message* msg)
 	{
 		boost::iostreams::stream_buffer<boost::iostreams::back_insert_device<std::string> > buf(data);
 		IO::BSONArchive ar(&buf, false, -1);
-		ar << msg;
+		IMEXMessagePtr imexMsg = IMEXMessage::Cast(msg);
+		if ( imexMsg )
+			ar << imexMsg;
+		else
+			ar << msg;
 
 		if ( !ar.success() )
 			throw Core::GeneralException("failed to serialize message");
