@@ -3,15 +3,20 @@
 # Standalone install script as an alternative to CMake
 
 cd "`dirname "$0"`"
-mkdir -p "`pwd`/build"
 export GOPATH="`pwd`/build:`pwd`/apps/go"
 
-cd "`pwd`"
-go get -u github.com/glenn-brown/golang-pkg-pcre/src/pkg/pcre
-go get -u github.com/golang/groupcache/lru
-go get -u github.com/golang/protobuf/proto
-go get -u gopkg.in/mgo.v2
-go get -u gopkg.in/tylerb/graceful.v1
+get() {
+	echo "downloading $1"
+	go get -u "$1"
+}
+
+mkdir -p build
+get github.com/glenn-brown/golang-pkg-pcre/src/pkg/pcre
+get github.com/golang/groupcache/lru
+get github.com/golang/protobuf/proto
+get gopkg.in/mgo.v2
+get gopkg.in/tylerb/graceful.v1
+echo "compiling the packages"
 go install httpmsgbus hmbseedlink wavefeed
 mkdir -p ~/seiscomp/sbin
 cp -p apps/go/bin/* ~/seiscomp/sbin
