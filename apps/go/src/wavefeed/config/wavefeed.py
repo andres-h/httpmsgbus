@@ -2,7 +2,6 @@ from __future__ import print_function
 import os, re, sys
 import seiscomp.kernel, seiscomp.config, seiscomp.system
 import seiscomp.datamodel, seiscomp.io
-import bson
 from hmb.client import HMB
 
 def log(message, *args, **kwargs):
@@ -18,10 +17,10 @@ def loadDatabase(dbUrl):
         raise Exception("error in parsing SeisComP DB URL")
     db = m.groupdict()
     try:
-        registry = seiscomp.Client.PluginRegistry.Instance()
+        registry = seiscomp.system.PluginRegistry.Instance()
         registry.addPluginName("db" + db["dbDriverName"])
         registry.loadPlugins()
-    except Exception, e:
+    except Exception as e:
         raise(e) ### "Cannot load database driver: %s" % e)
     dbDriver = seiscomp.io.DatabaseInterface.Create(db["dbDriverName"])
     if dbDriver is None:
@@ -34,7 +33,7 @@ def loadDatabase(dbUrl):
     log("loading inventory from database ...", end="")
     inventory = seiscomp.datamodel.Inventory()
     dbQuery.loadNetworks(inventory)
-    for ni in xrange(inventory.networkCount()):
+    for ni in range(inventory.networkCount()):
         dbQuery.loadStations(inventory.network(ni))
     log("done", sep="")
     return inventory
@@ -47,13 +46,13 @@ def loadStationDescriptions(inv):
     """
     d = dict()
 
-    for ni in xrange(inv.networkCount()):
+    for ni in range(inv.networkCount()):
         n = inv.network(ni)
         net = n.code()
-        if not d.has_key(net):
+        if net not in d:
             d[net] = {}
 
-            for si in xrange(n.stationCount()):
+            for si in range(n.stationCount()):
                 s = n.station(si)
                 sta = s.code()
                 d[net][sta] = s.description()
@@ -189,7 +188,7 @@ class Module(seiscomp.kernel.Module):
                 rc = seiscomp.config.Config()
                 rc.readConfig(os.path.join(self.rcdir, "station_%s_%s" % (net, sta)))
                 description = rc.getString("description")
-            except Exception, e:
+            except Exception:
                 # Maybe the rc file doesn't exist, maybe there's no readable description.
                 pass
 
@@ -262,7 +261,7 @@ class Module(seiscomp.kernel.Module):
 
             for a in params.get('access', []):
                 try:
-                    access.append(bson.Binary(bytes(bytearray(int(x) for x in re.split('[./]', a)))))
+                    access.append(bytes(bytearray(int(x) for x in re.split('[./]', a))))
 
                 except ValueError:
                     log("invalid IP/mask in access list:", a)
@@ -295,7 +294,7 @@ class Module(seiscomp.kernel.Module):
 
         # Mark remaining stations deleted using inexistent IP 0.0.0.0
         for ((networkCode, stationCode), (description, access)) in stations.items():
-            if tuple(access) == (bson.Binary(bytes(bytearray((0, 0, 0, 0)))),):
+            if tuple(access) == (bytes(bytearray((0, 0, 0, 0))),):
                 continue
 
             log("deleting", description)
@@ -307,7 +306,7 @@ class Module(seiscomp.kernel.Module):
                     'networkCode': networkCode,
                     'stationCode': stationCode,
                     'description': description,
-                    'access': [ bson.Binary(bytes(bytearray((0, 0, 0, 0)))) ]
+                    'access': [ bytes(bytearray((0, 0, 0, 0))) ]
                 }
             }
 

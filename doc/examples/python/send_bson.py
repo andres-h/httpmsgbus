@@ -1,8 +1,8 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 import sys
 import bson
-from urllib import urlopen
+from urllib.request import urlopen
 
 BUS = 'http://localhost:8000/test'
 

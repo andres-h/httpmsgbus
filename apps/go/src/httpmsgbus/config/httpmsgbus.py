@@ -1,3 +1,4 @@
+from __future__ import print_function
 import os, resource
 import seiscomp.kernel, seiscomp.config
 
@@ -19,7 +20,7 @@ class Module(seiscomp.kernel.CoreModule):
 
     def start(self):
         if not self.hmbEnable:
-            print "[kernel] HMB is disabled by config"
+            print("[kernel] HMB is disabled by config")
             return 0
 
         seiscomp.kernel.CoreModule.start(self)
@@ -47,10 +48,10 @@ class Module(seiscomp.kernel.CoreModule):
             resource.setrlimit(resource.RLIMIT_NOFILE, (lim[1], lim[1]))
 
             lim = resource.getrlimit(resource.RLIMIT_NOFILE)
-            print " maximum number of open files set to", lim[0]
+            print(" maximum number of open files set to", lim[0])
 
-        except Exception, e:
-            print " failed to raise the maximum number of open files:", str(e)
+        except Exception as e:
+            print(" failed to raise the maximum number of open files:", str(e))
 
         cfg = self._readConfig()
         prog = "run_with_lock"

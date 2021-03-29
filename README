@@ -41,6 +41,6 @@ If you are running MongoDB, try "-D mongodb://localhost:27017".
 HMB does not implement SSL, HTTP compression and authentication. Those
 features can be provided by a reverse proxy (eg., Apache with mod_proxy).
 
-[1] https://github.com/SeisComP3/seiscomp3
+[1] https://www.seiscomp.de/
 [2] https://golang.org/dl/
 
