@@ -17,6 +17,7 @@
 
 
 #include <string>
+#include <vector>
 #include <map>
 #include <boost/thread/thread.hpp>
 
@@ -55,6 +56,8 @@ private:
 	void sendPick(DataModel::Pick* pick);
 	void sendAmplitude(DataModel::Amplitude* amp);
 
+	void cleanup();
+
 	// ------------------------------------------------------------------
 	// Private implementation
 	// ------------------------------------------------------------------
@@ -65,6 +68,10 @@ private:
 	std::string _password;
 	std::string _sid;
 	std::string _cid;
+	bool _sendManualPicks;
+	std::vector<std::string> _pickAuthors;
+	std::vector<std::string> _amplitudeTypes;
+	std::map<std::string, DataModel::PickCPtr> _acceptedPicks;
 };
 // <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 
