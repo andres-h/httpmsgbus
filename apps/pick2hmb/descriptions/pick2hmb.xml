@@ -8,6 +8,27 @@
 				Address of HMB to send messages to.
 				</description>
 			</parameter>
+
+			<parameter name="pickAuthors" type="list:string">
+				<description>
+				Whitelist of allowed pick authors.
+				By default all authors are allowed.
+				</description>
+			</parameter>
+
+			<parameter name="amplitudeTypes" type="list:string">
+				<description>
+				Whitelist of allowed amplitude types.
+				By default all amplitude types are allowed.
+				</description>
+			</parameter>
+
+			<parameter name="sendManualPicks" type="boolean" default="false">
+				<description>
+				Enable sending of manual picks, which are
+				rejected by default.
+				</description>
+			</parameter>
 		</configuration>
 	</module>
 </seiscomp>

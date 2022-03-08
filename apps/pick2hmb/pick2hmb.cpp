@@ -15,8 +15,7 @@
 #define SEISCOMP_COMPONENT Pick2HMB
 #include "pick2hmb.h"
 
-#include <vector>
-
+#include <algorithm>
 #include <seiscomp/logging/log.h>
 #include <seiscomp/core/strings.h>
 #include <seiscomp/core/system.h>
@@ -52,6 +51,8 @@ Pick2HMB::Pick2HMB(int argc, char* argv[]) :
 	addMessagingSubscription("PICK");
 	addMessagingSubscription("AMPLITUDE");
 	setMessagingUsername(Util::basename(argv[0]));
+
+	_sendManualPicks = false;
 }
 // <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 
@@ -126,6 +127,37 @@ bool Pick2HMB::init() {
 	else {
 		_serverHost = host;
 		_serverPath = "/";
+	}
+
+
+	try {
+		_pickAuthors = configGetStrings("pickAuthors");
+		SEISCOMP_DEBUG("pickAuthors configured:");
+		for (const std::string &a : _pickAuthors)
+			SEISCOMP_DEBUG("    %s", a.c_str()); 
+	}
+	catch (Config::Exception& ) {
+		SEISCOMP_DEBUG("pickAuthors not configured");
+	}
+
+	try {
+		_amplitudeTypes = configGetStrings("amplitudeTypes");
+		SEISCOMP_DEBUG("amplitudeTypes configured:");
+		for (const std::string &a : _amplitudeTypes)
+			SEISCOMP_DEBUG("    %s", a.c_str()); 
+	}
+	catch (Config::Exception& ) {
+		SEISCOMP_DEBUG("amplitudeTypes not configured");
+	}
+
+	try {
+		_sendManualPicks = configGetBool("sendManualPicks");
+		SEISCOMP_DEBUG(_sendManualPicks ?
+			       "sendManualPicks enabled" :
+			       "sendManualPicks disabled");
+	}
+	catch (Config::Exception& ) {
+		SEISCOMP_DEBUG("sendManualPicks not configured");
 	}
 
 	return true;
@@ -228,12 +260,82 @@ void Pick2HMB::initSession()
 
 
 // <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+void Pick2HMB::cleanup() {
+	std::map<std::string, DataModel::PickCPtr>::iterator
+		it = _acceptedPicks.begin();
+
+	Core::Time now = Core::Time::GMT();
+
+	while (it != _acceptedPicks.end()) {
+		bool erase = false;
+		Core::TimeSpan dt = now - it->second->creationInfo().creationTime();
+		// erase picks older than one hour (currently hardcoded)
+		if (double(dt) > 3600)
+			erase = true;
+
+		if (erase)
+			it = _acceptedPicks.erase(it);
+		else
+			++it;
+}
+}
+// <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+
+
+
+
+// <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 void Pick2HMB::sendPick(DataModel::Pick* pick) {
+
+	bool rejected = false;
+	bool manual = false;
+
 	try {
 		if ( pick->evaluationMode() == DataModel::MANUAL )
-			return;
+			manual = true;
 	}
 	catch ( ... ) {
+		// Don't accept picks without evaluation mode
+		rejected = true;
+	}
+
+	try {
+		pick->creationInfo().creationTime();
+	}
+	catch ( ... ) {
+		// Don't accept picks without creation time
+		rejected = true;
+	}
+
+	Core::Time now = Core::Time::GMT();
+	Core::TimeSpan dt = now - pick->time().value();
+	// reject picks older than one hour (currently hardcoded)
+	if (double(dt) > 3600)
+		rejected = true;
+
+	std::string author;
+	try {
+		author = pick->creationInfo().author();
+	}
+	catch ( ... ) {
+		// Don't accept picks without author
+		rejected = true;
+	}
+
+	if ( manual && ! _sendManualPicks ) {
+		rejected = true;
+	}
+
+	if ( ! manual &&
+	     ! _pickAuthors.empty() &&
+	     std::find(_pickAuthors.begin(), _pickAuthors.end(), author) ==
+	     _pickAuthors.end() ) {
+		SEISCOMP_DEBUG("Pick from author %s rejected", author.c_str());
+		rejected = true;
+	}
+
+	if (rejected) {
+		SEISCOMP_DEBUG("Pick %s rejected", pick->publicID().c_str());
 		return;
 	}
 
@@ -245,6 +347,7 @@ void Pick2HMB::sendPick(DataModel::Pick* pick) {
 			pick->time().value());
 
 	if ( stream == NULL ) {
+		SEISCOMP_ERROR("Pick %s:", pick->publicID().c_str());
 		SEISCOMP_ERROR("cannot find stream %s.%s.%s.%s at %s",
 				pick->waveformID().networkCode().c_str(),
 				pick->waveformID().stationCode().c_str(),
@@ -260,6 +363,7 @@ void Pick2HMB::sendPick(DataModel::Pick* pick) {
 			return;
 	}
 	catch ( ... ) {
+		SEISCOMP_ERROR("Pick %s:", pick->publicID().c_str());
 		SEISCOMP_ERROR("failed to get restricted status of %s.%s.%s.%s at %s",
 				pick->waveformID().networkCode().c_str(),
 				pick->waveformID().stationCode().c_str(),
@@ -277,6 +381,7 @@ void Pick2HMB::sendPick(DataModel::Pick* pick) {
 			pick->time().value());
 
 	if ( loc == NULL ) {
+		SEISCOMP_ERROR("Pick %s:", pick->publicID().c_str());
 		SEISCOMP_ERROR("cannot find location %s.%s.%s at %s",
 				pick->waveformID().networkCode().c_str(),
 				pick->waveformID().stationCode().c_str(),
@@ -293,6 +398,7 @@ void Pick2HMB::sendPick(DataModel::Pick* pick) {
 		lon = loc->longitude();
 	}
 	catch ( ... ) {
+		SEISCOMP_ERROR("Pick %s:", pick->publicID().c_str());
 		SEISCOMP_ERROR("failed to get coordinates of %s.%s.%s at %s",
 				pick->waveformID().networkCode().c_str(),
 				pick->waveformID().stationCode().c_str(),
@@ -301,6 +407,12 @@ void Pick2HMB::sendPick(DataModel::Pick* pick) {
 
 		return;
 	}
+
+
+	// At this point the pick has passed all checks and can be sent.
+	SEISCOMP_DEBUG("Pick %s accepted", pick->publicID().c_str());
+
+	_acceptedPicks[pick->publicID()] = pick;
 
 	try {
 		// if creation info is available, override author
@@ -355,6 +467,7 @@ void Pick2HMB::sendPick(DataModel::Pick* pick) {
 			break;
 		}
 		catch ( Core::GeneralException &e ) {
+			SEISCOMP_ERROR("Pick %s:", pick->publicID().c_str());
 			SEISCOMP_ERROR("%s", e.what());
 
 			if ( sock.isOpen() )
@@ -378,6 +491,34 @@ void Pick2HMB::sendAmplitude(DataModel::Amplitude* amp) {
 	catch ( ... ) {
 		/* return; */
 	}
+
+	std::string type;
+	try {
+		type = amp->type();
+	}
+	catch ( ... ) {
+		return;
+	}
+	if ( ! _amplitudeTypes.empty() &&
+	     std::find(_amplitudeTypes.begin(), _amplitudeTypes.end(), type) ==
+             _amplitudeTypes.end()){
+		SEISCOMP_DEBUG_S("Amplitude "+amp->publicID()+" type="+type+" rejected");
+		return;
+	}
+
+
+
+	std::string pickID;
+	try {
+		pickID = amp->pickID();
+	}
+	catch (...) {
+		// amplitudes not referring to a pick are ignored
+		return;
+	}
+
+	if (_acceptedPicks.find(pickID) == _acceptedPicks.end())
+		return;
 
 	DataModel::Stream *stream = Client::Inventory::Instance()->getStream(
 			amp->waveformID().networkCode(),
@@ -448,6 +589,8 @@ void Pick2HMB::sendAmplitude(DataModel::Amplitude* amp) {
 	}
 	catch ( ... ) {
 	}
+
+	SEISCOMP_DEBUG_S("Amplitude "+amp->publicID()+" type="+type+" accepted");
 
 	std::string data;
 
