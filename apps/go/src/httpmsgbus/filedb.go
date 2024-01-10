@@ -13,6 +13,7 @@
 package main
 
 import (
+	"bitbucket.org/andresh/httpmsgbus/apps/go/src/regexp"
 	"errors"
 	"fmt"
 	"github.com/golang/groupcache/lru"
@@ -20,7 +21,6 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
-	"regexp"
 	"sort"
 	"strconv"
 	"sync"

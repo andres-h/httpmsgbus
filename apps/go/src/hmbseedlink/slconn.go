@@ -13,14 +13,14 @@
 package main
 
 import (
+	"bitbucket.org/andresh/httpmsgbus/apps/go/src/hmb"
+	"bitbucket.org/andresh/httpmsgbus/apps/go/src/regexp"
 	"bufio"
 	"bytes"
 	"errors"
 	"fmt"
-	"hmb"
 	"io"
 	"net"
-	"regexp"
 	"strconv"
 	"strings"
 	"sync"

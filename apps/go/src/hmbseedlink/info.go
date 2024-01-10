@@ -13,10 +13,10 @@
 package main
 
 import (
+	"bitbucket.org/andresh/httpmsgbus/apps/go/src/hmb"
 	"bufio"
 	"encoding/binary"
 	"fmt"
-	"hmb"
 	"net"
 	"strings"
 	"sync"

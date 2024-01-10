@@ -13,11 +13,11 @@
 package main
 
 import (
+	"bitbucket.org/andresh/httpmsgbus/apps/go/src/regexp"
 	"errors"
 	"gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
 	"io"
-	"regexp"
 	"strings"
 	"sync"
 )

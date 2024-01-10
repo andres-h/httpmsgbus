@@ -13,10 +13,10 @@
 package main
 
 import (
+	"bitbucket.org/andresh/httpmsgbus/apps/go/src/regexp"
 	"encoding/json"
 	"errors"
 	"io"
-	"regexp"
 	"strings"
 	"sync"
 	"sync/atomic"

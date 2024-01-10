@@ -13,11 +13,11 @@
 package main
 
 import (
+	"bitbucket.org/andresh/httpmsgbus/apps/go/src/regexp"
 	"encoding/json"
 	"errors"
 	"github.com/golang/protobuf/proto"
 	"gopkg.in/mgo.v2/bson"
-	"regexp"
 	"strconv"
 	"time"
 )

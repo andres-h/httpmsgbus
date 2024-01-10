@@ -5,13 +5,19 @@ FROM centos:7
 RUN yum update -y && \
     yum install -y \
         git \
-        go \
+        gcc \
         pcre-devel && \
     yum clean all
 
 
 # copy project into container
 COPY . /app/
+
+
+# install the latest go version in /usr/local/go
+RUN /app/getgo.sh
+ENV PATH="/usr/local/go/bin:$PATH"
+
 
 # install as unprivileged user
 RUN useradd -m httpmsgbus_user

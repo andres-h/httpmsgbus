@@ -1,15 +1,9 @@
 httpmsgbus (HMB) can be used as a standalone program or as an add-on to
-SeisComP [1]; the code can be copied to SeisComP source tree and compiled
-together with the rest of the SeisComP using CMake or installed separately using
-the install.sh script. Go compiler (<1.16) [2] is required to compile the code.
-Go 1.16 and newer are currently not supported due to incompatibilities of the
-module system.
+SeisComP [1]; the code can be installed using the install.sh script.
+Go compiler [2] is required to compile the code.
 
 Libpcre (pcre-devel, libpcre3-dev or similar Linux package) is also
-required, unless the "vendor" directory is removed to link with standard Go
-regexp package. Using the standard Go regexp package creates a portable
-binary, but there seems to be a memory leak (ever growing cache) in some
-Go versions.
+required.
 
 In SeisComP, HMB is disabled by default and can be enabled by adding the
 following options to ~/seiscomp/etc/kernel.cfg:

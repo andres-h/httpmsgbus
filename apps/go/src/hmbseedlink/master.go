@@ -13,9 +13,9 @@
 package main
 
 import (
+	"bitbucket.org/andresh/httpmsgbus/apps/go/src/hmb"
 	"bufio"
 	"fmt"
-	"hmb"
 	"io"
 	"net"
 	"os"

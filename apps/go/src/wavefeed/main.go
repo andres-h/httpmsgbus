@@ -13,22 +13,22 @@
 package main
 
 import (
+	"bitbucket.org/andresh/httpmsgbus/apps/go/src/hmb"
+	"bitbucket.org/andresh/httpmsgbus/apps/go/src/regexp"
 	"bytes"
 	"encoding/binary"
 	"flag"
 	"fmt"
-	"hmb"
 	"io"
 	_log "log"
 	"log/syslog"
 	"os"
-	"regexp"
 	"strings"
 	"syscall"
 	"time"
 )
 
-const VERSION = "0.1 (2020.042)"
+const VERSION = "0.1 (2024.010)"
 
 const (
 	PLUGINFD        = 63

@@ -13,6 +13,7 @@
 package main
 
 import (
+	"bitbucket.org/andresh/httpmsgbus/apps/go/src/regexp"
 	"bytes"
 	"encoding/json"
 	"flag"
@@ -28,7 +29,6 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
-	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
@@ -37,7 +37,7 @@ import (
 	"time"
 )
 
-const VERSION = "0.16 (2017.119)"
+const VERSION = "0.16 (2024.010)"
 
 const (
 	// The following parameters should be tuned for optimum performance.

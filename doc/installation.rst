@@ -5,13 +5,13 @@ Installation
 Compiling and installing HMB
 ============================
 
-* Install Go (<1.16) from https://golang.org/dl/ or from the package repository of your operating system and make sure that the "go" tool is in the path. (Go 1.16 and newer are currently not supported due to incompatibilities of the module system.)
+* Install Go from https://golang.org/dl/ or from the package repository of your operating system and make sure that the "go" tool is in the path.
 
 * Make sure that you have a working Internet connection and git is installed. Git will be used by the "go" tool to download some additional Go packages.
 
-* Install PCRE development package for your Linux distribution (usually named pcre-devel or libpcre3-dev). If you are on a non-Linux platform or want to create a portable binary for Linux, it is possible to use the standard Go regexp package instead of PCRE by removing the "vendor" directory in HMB source. Some versions of the standard Go regexp package may have a memory leak, so keep an eye on the memory consumption if you use it.
+* Install PCRE development package for your Linux distribution (usually named pcre-devel or libpcre3-dev).
 
-* Either copy HMB source code to SeisComP source tree and use CMake or simply call the "install.sh" script included.
+* Run the "install.sh" script.
 
 Configuring reverse proxy
 =========================
