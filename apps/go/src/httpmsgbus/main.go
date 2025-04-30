@@ -13,14 +13,15 @@
 package main
 
 import (
-	"bitbucket.org/andresh/httpmsgbus/apps/go/src/regexp"
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
-	"gopkg.in/mgo.v2"
-	"gopkg.in/mgo.v2/bson"
-	"gopkg.in/tylerb/graceful.v1"
+	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.mongodb.org/mongo-driver/v2/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
 	"io"
 	_log "log"
 	"log/syslog"
@@ -29,6 +30,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
@@ -37,7 +39,7 @@ import (
 	"time"
 )
 
-const VERSION = "0.16 (2024.010)"
+const VERSION = "0.20 (2025.120)"
 
 const (
 	// The following parameters should be tuned for optimum performance.
@@ -461,6 +463,7 @@ func (self *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			if err != nil {
 				LogRequestError(r, err.Error())
 				http.Error(w, err.Error(), http.StatusServiceUnavailable)
+				repo.Shutdown()
 				self.mutex.Unlock()
 				return
 			}
@@ -522,6 +525,8 @@ func main() {
 		return
 	}
 
+	ctx := context.Background()
+
 	var repoFactory RepositoryFactory
 
 	// Parse the database option and create the respective RepositoryFactory.
@@ -532,14 +537,15 @@ func main() {
 		log.Fatal(err)
 
 	} else if u.Scheme == "mongodb" {
-		if mgoSession, err := mgo.Dial(*database); err != nil {
+		if client, err := mongo.Connect(options.Client().ApplyURI(*database)); err != nil {
+			log.Fatal(err)
+
+		} else if err := client.Ping(ctx, nil); err != nil {
 			log.Fatal(err)
 
 		} else {
-			mgoSession.SetSafe(nil)
-
 			var err error
-			repoFactory, err = NewMongoRepositoryFactory(mgoSession, *queueSize, INSERTS_PARALLEL, *bufferSize/2, QUERIES_PARALLEL, QUERIES_QUEUED, REPLY_CHAN_SIZE)
+			repoFactory, err = NewMongoRepositoryFactory(client, *queueSize, INSERTS_PARALLEL, *bufferSize/2, QUERIES_PARALLEL, QUERIES_QUEUED, REPLY_CHAN_SIZE)
 
 			if err != nil {
 				log.Fatal(err)
@@ -626,58 +632,62 @@ func main() {
 	log.Printf("listening at :%d", *port)
 
 	// Check for the existence of Regexp.ShimTag(), which indicates that
-	// a vendor regexp is used. Unfortunately the standard Go regexp is
-	// broken.
-	if _, ok := interface{}(regexp.Regexp{}).(interface{ShimTag()}); !ok {
-		log.Println("WARNING: you appear to be using the standard regexp package, which may leak memory")
+	// a vendor regexp is used.
+	if _, ok := interface{}(regexp.Regexp{}).(interface{ShimTag()}); ok {
+		log.Println("using regexp shim")
 	}
 
 	// Closing stopChan tells running producers to stop.
 	stopChan := make(chan struct{})
 	busses := map[string]*Bus{}
 
-	// Create our http.Server, which is wrapped in graceful.Server,
-	// enabling graceful shutdown.
-	srv := &graceful.Server{
-		NoSignalHandling: true,
-		Server: &http.Server{
-			Addr: fmt.Sprintf(":%d", *port),
-			Handler: &Handler{
-				bufferSize:     *bufferSize,
-				postSize:       *postSize,
-				sessionTimeout: *sessionTimeout,
-				sessionsPerIP:  *sessionsPerIP,
-				delta:          *delta,
-				useXFF:         *useXFF,
-				repoFactory:    repoFactory,
-				stopChan:       stopChan,
-				busses:         busses,
-			},
+	// Create our http.Server
+	srv := &http.Server{
+		Addr: fmt.Sprintf(":%d", *port),
+		Handler: &Handler{
+			bufferSize:     *bufferSize,
+			postSize:       *postSize,
+			sessionTimeout: *sessionTimeout,
+			sessionsPerIP:  *sessionsPerIP,
+			delta:          *delta,
+			useXFF:         *useXFF,
+			repoFactory:    repoFactory,
+			stopChan:       stopChan,
+			busses:         busses,
 		},
 	}
 
 	go func() {
-		// Set up signal handler for SIGINT and SIGTERM.
-		interrupt := make(chan os.Signal, 1)
-		signal.Notify(interrupt, syscall.SIGINT, syscall.SIGTERM)
+		if err := srv.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
+			log.Fatal("ListenAndServe:", err)
+		}
 
-		// Wait for a signal.
-		<-interrupt
-		log.Println("shutting down")
-
-		// Tell the server to stop accepting new connections
-		// and shut down after max. GRACEFUL_TIMEOUT seconds.
-		srv.Stop(time.Duration(GRACEFUL_TIMEOUT) * time.Second)
-
+		// If ListenAndServe exited, we are shutting down...
 		// Tell producers to stop.
 		close(stopChan)
 	}()
 
-	if err := srv.ListenAndServe(); err != nil {
-		log.Fatal("ListenAndServe:", err)
-	}
+	// Set up signal handler for SIGINT and SIGTERM.
+	interrupt := make(chan os.Signal, 1)
+	signal.Notify(interrupt, syscall.SIGINT, syscall.SIGTERM)
 
-	// If ListenAndServe exited, we are shutting down...
+	// Wait for a signal.
+	<-interrupt
+	log.Println("shutting down")
+
+	// Tell the server to stop accepting new connections
+	// and shut down after max. GRACEFUL_TIMEOUT seconds.
+	ctx, cancel := context.WithTimeout(ctx, GRACEFUL_TIMEOUT*time.Second)
+	defer cancel()
+
+	if err := srv.Shutdown(ctx); err != nil {
+		if errors.Is(err, context.DeadlineExceeded) {
+			log.Println("graceful shutdown time exceeded")
+
+		} else {
+			log.Println("HTTP shutdown error:", err)
+		}
+	}
 
 	for _, bus := range busses {
 		bus.Shutdown()

@@ -13,10 +13,12 @@
 package hmb
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
-	"gopkg.in/mgo.v2/bson"
+	"go.mongodb.org/mongo-driver/v2/bson"
 	"strconv"
+	"sync"
 	"time"
 )
 
@@ -78,19 +80,20 @@ func (self *Time) UnmarshalJSON(data []byte) (err error) {
 	return
 }
 
-func (self Time) GetBSON() (interface{}, error) {
+func (self Time) MarshalBSONValue() (byte, []byte, error) {
 	if self.IsZero() {
-		return nil, nil
+		return byte(bson.TypeNull), nil, nil
 
 	} else {
-		return self.Format(TIME_FORMAT_MICRO), nil
+		typ, data, err := bson.MarshalValue(self.Format(TIME_FORMAT_MICRO))
+		return byte(typ), data, err
 	}
 }
 
-func (self *Time) SetBSON(raw bson.Raw) (err error) {
+func (self *Time) UnmarshalBSONValue(typ byte, data []byte) (err error) {
 	var decoded interface{}
 
-	err = raw.Unmarshal(&decoded)
+	err = bson.UnmarshalValue(bson.Type(typ), data, &decoded)
 
 	if err != nil {
 		self.Time = time.Time{}
@@ -157,19 +160,20 @@ func (self *Sequence) UnmarshalJSON(data []byte) (err error) {
 	return self.UnmarshalText(data)
 }
 
-func (self Sequence) GetBSON() (interface{}, error) {
+func (self Sequence) MarshalBSONValue() (byte, []byte, error) {
 	if !self.Set {
-		return nil, nil
+		return byte(bson.TypeNull), nil, nil
 
 	} else {
-		return self.Value, nil
+		typ, data, err := bson.MarshalValue(self.Value)
+		return byte(typ), data, err
 	}
 }
 
-func (self *Sequence) SetBSON(raw bson.Raw) (err error) {
+func (self *Sequence) UnmarshalBSONValue(typ byte, data []byte) (err error) {
 	var decoded interface{}
 
-	err = raw.Unmarshal(&decoded)
+	err = bson.UnmarshalValue(bson.Type(typ), data, &decoded)
 
 	if err != nil {
 		*self = Sequence{}
@@ -191,6 +195,10 @@ func (self *Sequence) SetBSON(raw bson.Raw) (err error) {
 	}
 
 	return
+}
+
+func (self Sequence) IsZero() bool {
+	return !self.Set
 }
 
 // OpenParam defines the dataset that is used by the /open method of the bus.
@@ -294,32 +302,71 @@ func (self *Payload) UnmarshalJSON(data []byte) error {
 	return json.Unmarshal(data, &self.Data)
 }
 
-func (self Payload) GetBSON() (interface{}, error) {
-	return self.Data, nil
+func (self Payload) MarshalBSONValue() (byte, []byte, error) {
+	if self.Data == nil {
+		return byte(bson.TypeNull), nil, nil
+
+	} else {
+		typ, data, err := bson.MarshalValue(self.Data)
+		return byte(typ), data, err
+	}
 }
 
-func (self *Payload) SetBSON(raw bson.Raw) (err error) {
-	// Unmarshal() seems to leave references to the original data,
-	// so make a copy of the data.
-	var rawcopy bson.Raw
-	rawcopy.Kind = raw.Kind
-	rawcopy.Data = make([]byte, len(raw.Data))
-	copy(rawcopy.Data, raw.Data)
+// Use MgoRepository to get native go types instead of bson.A, bson.M and
+// bson.Binary.
+var mgoRegistry = bson.NewMgoRegistry()
 
-	if raw.Kind == 3 {
+var decPool = sync.Pool{
+	New: func() interface{} {
+		dec := bson.NewDecoder(nil)
+		dec.SetRegistry(mgoRegistry)
+		return dec
+	},
+}
+
+func (self *Payload) UnmarshalBSONValue(typ byte, data []byte) (err error) {
+	switch bson.Type(typ) {
+	case bson.TypeEmbeddedDocument:
 		// Data contains a BSON document. Anything else than
 		// map[string]interface{} is ignored by the filter.
 		var decoded map[string]interface{}
-		err = rawcopy.Unmarshal(&decoded)
-		self.Data = decoded
 
-	} else {
-		var decoded interface{}
-		err = rawcopy.Unmarshal(&decoded)
-		self.Data = decoded
+		dec := decPool.Get().(*bson.Decoder)
+		defer decPool.Put(dec)
+
+		dec.Reset(bson.NewDocumentReader(bytes.NewReader(data)))
+
+		err = dec.Decode(&decoded)
+
+		if err != nil {
+			self.Data = interface{}(nil)
+
+		} else {
+			self.Data = decoded
+		}
+
+	case bson.TypeBinary:
+		var decoded []byte
+
+		err = bson.UnmarshalValue(bson.Type(typ), data, &decoded)
+
+		if err != nil {
+			self.Data = interface{}(nil)
+
+		} else {
+			self.Data = decoded
+		}
+
+	default:
+		err = errors.New("unsupported datatype")
+		self.Data = interface{}(nil)
 	}
 
 	return
+}
+
+func (self Payload) IsZero() bool {
+	return self.Data == nil
 }
 
 // Message defines an HMB message.
@@ -328,10 +375,10 @@ type Message struct {
 	Queue     string   `json:"queue,omitempty" bson:"queue,omitempty"`
 	Sender    string   `json:"sender,omitempty" bson:"sender,omitempty"`
 	Topic     string   `json:"topic,omitempty" bson:"topic,omitempty"`
-	Seq       Sequence `json:"seq,omitempty" bson:"seq,omitempty"`
-	Starttime Time     `json:"starttime,omitempty" bson:"starttime,omitempty"`
-	Endtime   Time     `json:"endtime,omitempty" bson:"endtime,omitempty"`
-	Data      Payload  `json:"data,omitempty" bson:"data,omitempty"`
+	Seq       Sequence `json:"seq,omitempty,omitzero" bson:"seq,omitempty,omitzero"`
+	Starttime Time     `json:"starttime,omitempty,omitzero" bson:"starttime,omitempty,omitzero"`
+	Endtime   Time     `json:"endtime,omitempty,omitzero" bson:"endtime,omitempty,omitzero"`
+	Data      Payload  `json:"data,omitempty,omitzero" bson:"data,omitempty,omitzero"`
 
 	// The following fields are included for compatibility with older
 	// applications and will be removed in future versions. Any extra

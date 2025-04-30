@@ -9,8 +9,6 @@ Compiling and installing HMB
 
 * Make sure that you have a working Internet connection and git is installed. Git will be used by the "go" tool to download some additional Go packages.
 
-* Install PCRE development package for your Linux distribution (usually named pcre-devel or libpcre3-dev).
-
 * Run the "install.sh" script.
 
 Configuring reverse proxy

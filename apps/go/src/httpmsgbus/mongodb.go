@@ -13,12 +13,13 @@
 package main
 
 import (
-	"bitbucket.org/andresh/httpmsgbus/apps/go/src/regexp"
+	"context"
 	"errors"
-	"gopkg.in/mgo.v2"
-	"gopkg.in/mgo.v2/bson"
+	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.mongodb.org/mongo-driver/v2/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
 	"io"
-	"strings"
+	"regexp"
 	"sync"
 )
 
@@ -32,7 +33,7 @@ type mdbInsertDescriptor struct {
 // for receiving query results and to cancel a running query.
 type mdbQueryDescriptor struct {
 	q          bson.M        // MongoDB query
-	sort       []string      // MongoDB sort descriptor
+	sort       bson.D        // MongoDB sort descriptor
 	limit      int           // Query limit
 	cname      string        // Collection name
 	replyChan  chan *Message // Out: channel where query results are sent to
@@ -101,12 +102,12 @@ func (self *mdbCollection) Query(seq int64, endseq int64, starttime Time, endtim
 
 	if seq >= 0 {
 		d.q = bson.M{"seq": bson.M{"$gte": seq}}
-		d.sort = []string{"seq"}
+		d.sort = bson.D{{"seq", 1}}
 		d.limit = limit
 
 	} else {
 		d.q = bson.M{}
-		d.sort = []string{"-seq"}
+		d.sort = bson.D{{"seq", -1}}
 		d.limit = int(-seq)
 	}
 
@@ -115,11 +116,11 @@ func (self *mdbCollection) Query(seq int64, endseq int64, starttime Time, endtim
 	}
 
 	if topicRx != nil {
-		d.q["topic"] = bson.RegEx{topicRx.String(), ""}
+		d.q["topic"] = bson.Regex{topicRx.String(), ""}
 	}
 
 	if topicNrx != nil {
-		d.q = bson.M{"$and": []bson.M{d.q, {"topic": bson.M{"$not": bson.RegEx{topicNrx.String(), ""}}}}}
+		d.q = bson.M{"$and": []bson.M{d.q, {"topic": bson.M{"$not": bson.Regex{topicNrx.String(), ""}}}}}
 	}
 
 	if endseq >= 0 {
@@ -176,7 +177,7 @@ func (self *mdbCollection) OldestData() (int64, Time) {
 // mdbRepository implements Repository, which is persistent storage for one
 // bus.
 type mdbRepository struct {
-	db             *mgo.Database             // Associated Mongo database
+	db             *mongo.Database           // Associated Mongo database
 	collectionSize int                       // Size of capped collection
 	insertChan     chan *mdbInsertDescriptor // Channel for insert requests (passed on to collections)
 	queryChan      chan *mdbQueryDescriptor  // Channel for query requests (passed on to collections)
@@ -185,9 +186,9 @@ type mdbRepository struct {
 }
 
 // mdbNewRepository creates a new mdbRepository object.
-func mdbNewRepository(mgoSession *mgo.Session, name string, collectionSize int, insertsParallel int, insertsQueued int, queriesParallel int, queriesQueued int, replyChanSize int, waitGroup *sync.WaitGroup) (*mdbRepository, error) {
+func mdbNewRepository(client *mongo.Client, name string, collectionSize int, insertsParallel int, insertsQueued int, queriesParallel int, queriesQueued int, replyChanSize int, waitGroup *sync.WaitGroup) (*mdbRepository, error) {
 	self := &mdbRepository{
-		db:             mgoSession.DB(name),
+		db:             client.Database(name),
 		collectionSize: collectionSize,
 		insertChan:     make(chan *mdbInsertDescriptor, insertsQueued),
 		queryChan:      make(chan *mdbQueryDescriptor, queriesQueued),
@@ -197,11 +198,11 @@ func mdbNewRepository(mgoSession *mgo.Session, name string, collectionSize int, 
 
 	for i := 0; i < insertsParallel; i++ {
 		self.waitGroup.Add(1)
-		go self.insertTask(mgoSession.Copy().DB(name))
+		go self.insertTask()
 	}
 
 	for i := 0; i < queriesParallel; i++ {
-		go self.queryTask(mgoSession.Copy().DB(name))
+		go self.queryTask()
 	}
 
 	return self, nil
@@ -212,7 +213,9 @@ func mdbNewRepository(mgoSession *mgo.Session, name string, collectionSize int, 
 // has been closed), insertTask decrements the WaitGroup counter and quits.
 // The latter is needed by the repository to ensure that pending inserts have
 // finished when shutting down.
-func (self *mdbRepository) insertTask(db *mgo.Database) {
+func (self *mdbRepository) insertTask() {
+	ctx := context.TODO()
+
 	for {
 		d, ok := <-self.insertChan
 
@@ -221,89 +224,87 @@ func (self *mdbRepository) insertTask(db *mgo.Database) {
 			break
 		}
 
-		err := db.C(d.cname).Insert(d.m)
+		_, err := self.db.Collection(d.cname).InsertOne(ctx, d.m)
 
 		if err != nil {
 			log.Println("insert:", err)
-			db.Session.Refresh()
-
-			err := db.C(d.cname).Insert(d.m)
-
-			if err != nil {
-				log.Println("insert (retry):", err)
-			}
 		}
 	}
 }
 
 // queryTask is a goroutine that waits for query requests on the queryChan
 // and executes those.
-func (self *mdbRepository) queryTask(db *mgo.Database) {
+func (self *mdbRepository) queryTask() {
+	ctx := context.TODO()
+
 	for {
 		d := <-self.queryChan
-		q := db.C(d.cname).Find(d.q)
+		opts := options.Find()
 
 		if len(d.sort) > 0 {
-			q = q.Sort(d.sort...)
+			opts.SetSort(d.sort)
 		}
 
 		if d.limit > 0 {
-			q = q.Limit(d.limit)
+			opts.SetLimit(int64(d.limit))
 		}
 
-		iter := q.Iter()
-		count := 0
-		finished := false
+		var count int = 0
+		var partial bool = false
+		var cursor *mongo.Cursor
+		var err error
 
-	loop:
-		for {
-			m := &Message{}
+		if cursor, err = self.db.Collection(d.cname).Find(ctx, d.q, opts); err == nil {
+			defer cursor.Close(ctx)
 
-			if !iter.Next(m) {
-				finished = true
-				break
+		loop:
+			for cursor.Next(ctx) {
+				m := &Message{}
+
+				if err = cursor.Decode(m); err == nil {
+					select {
+					case <-d.cancelChan:
+						break loop
+
+					default:
+					}
+
+					select {
+					case <-d.cancelChan:
+						break loop
+
+					case d.replyChan <- m:
+
+					default:
+						partial = true
+						break loop
+					}
+
+					select {
+					case d.readyChan <- true:
+					default:
+					}
+
+					count++
+
+				} else {
+					break loop
+				}
 			}
 
-			select {
-			case <-d.cancelChan:
-				finished = true
-				break loop
-
-			default:
+			if err == nil {
+				err = cursor.Err()
 			}
-
-			select {
-			case <-d.cancelChan:
-				finished = true
-				break loop
-
-			case d.replyChan <- m:
-
-			default:
-				break loop
-			}
-
-			select {
-			case d.readyChan <- true:
-			default:
-			}
-
-			count++
 		}
-
-		err := iter.Close()
 
 		if err != nil {
 			log.Println("query:", err)
-			db.Session.Refresh()
+
+		} else if partial || (d.limit > 0 && count >= d.limit) {
+			err = ECONTINUE
 
 		} else {
-			if !finished || (d.limit > 0 && count >= d.limit) {
-				err = ECONTINUE
-
-			} else {
-				err = io.EOF
-			}
+			err = io.EOF
 		}
 
 		select {
@@ -321,22 +322,28 @@ func (self *mdbRepository) queryTask(db *mgo.Database) {
 // InitCollection opens a new collection. Use Collection() to get a reference
 // to a collection that is already known to the bus.
 func (self *mdbRepository) InitCollection(name string) (Collection, error) {
-	C := self.db.C(name)
+	ctx := context.TODO()
+	opts := options.CreateCollection()
+	opts.SetCapped(true)
+	opts.SetSizeInBytes(int64(self.collectionSize * 1024 * 1024))
 
-	if err := C.Create(&mgo.CollectionInfo{Capped: true, MaxBytes: self.collectionSize * 1024 * 1024}); err != nil {
-		self.db.Session.Refresh()
+	if err := self.db.CreateCollection(ctx, name, opts); err != nil {
 		return nil, err
 	}
 
-	if err := C.EnsureIndex(mgo.Index{Key: []string{"seq"}, Unique: true}); err != nil {
-		self.db.Session.Refresh()
-		C.DropCollection()
-		return nil, err
+	idx := []mongo.IndexModel{
+		{
+			Keys: bson.D{{"seq", 1}},
+			Options: options.Index().SetUnique(true),
+		},
+		{
+			Keys: bson.D{{"endtime", 1}},
+			Options: nil,
+		},
 	}
 
-	if err := C.EnsureIndex(mgo.Index{Key: []string{"endtime"}}); err != nil {
-		self.db.Session.Refresh()
-		C.DropCollection()
+	if _, err := self.db.Collection(name).Indexes().CreateMany(ctx, idx, nil); err != nil {
+		self.db.Collection(name).Drop(ctx)
 		return nil, err
 	}
 
@@ -345,19 +352,14 @@ func (self *mdbRepository) InitCollection(name string) (Collection, error) {
 
 // CollectionNames returns a list of collection names.
 func (self *mdbRepository) CollectionNames() ([]string, error) {
-	if names, err := self.db.CollectionNames(); err != nil {
+	ctx := context.TODO()
+	filter := bson.M{"name": bson.M{"$not": bson.Regex{"^system\\.", ""}}}
+
+	if names, err := self.db.ListCollectionNames(ctx, filter); err != nil {
 		return nil, err
 
 	} else {
-		result := make([]string, 0, len(names))
-
-		for _, name := range names {
-			if !strings.HasPrefix(name, "system.") {
-				result = append(result, name)
-			}
-		}
-
-		return result, nil
+		return names, nil
 	}
 }
 
@@ -375,7 +377,7 @@ func (self *mdbRepository) Shutdown() {
 // mdbRepositoryFactory implements RepositoryFactory, whose job is to create
 // repositories.
 type mdbRepositoryFactory struct {
-	mgoSession      *mgo.Session    // Associated Mongo session
+	client          *mongo.Client   // Associated Mongo client
 	collectionSize  int             // Size of capped collections
 	insertsParallel int             // Number of insert goroutines
 	insertsQueued   int             // Size of insert channel
@@ -386,9 +388,9 @@ type mdbRepositoryFactory struct {
 }
 
 // NewMongoRepositoryFactory creates a new mdbRepositoryFactory object.
-func NewMongoRepositoryFactory(mgoSession *mgo.Session, collectionSize int, insertsParallel int, insertsQueued int, queriesParallel int, queriesQueued int, replyChanSize int) (RepositoryFactory, error) {
+func NewMongoRepositoryFactory(client *mongo.Client, collectionSize int, insertsParallel int, insertsQueued int, queriesParallel int, queriesQueued int, replyChanSize int) (RepositoryFactory, error) {
 	self := &mdbRepositoryFactory{
-		mgoSession:      mgoSession,
+		client:          client,
 		collectionSize:  collectionSize,
 		insertsParallel: insertsParallel,
 		insertsQueued:   insertsQueued,
@@ -403,7 +405,7 @@ func NewMongoRepositoryFactory(mgoSession *mgo.Session, collectionSize int, inse
 
 // Repository creates a new mdbRepository object.
 func (self *mdbRepositoryFactory) Repository(name string) (Repository, error) {
-	return mdbNewRepository(self.mgoSession, name, self.collectionSize, self.insertsParallel, self.insertsQueued, self.queriesParallel, self.queriesQueued, self.replyChanSize, self.waitGroup)
+	return mdbNewRepository(self.client, name, self.collectionSize, self.insertsParallel, self.insertsQueued, self.queriesParallel, self.queriesQueued, self.replyChanSize, self.waitGroup)
 }
 
 // Shutdown waits for pending inserts to finish. The Shutdown() method of each

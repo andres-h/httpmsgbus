@@ -13,12 +13,14 @@
 package main
 
 import (
-	"bitbucket.org/andresh/httpmsgbus/apps/go/src/regexp"
+	"bytes"
 	"encoding/json"
 	"errors"
 	"github.com/golang/protobuf/proto"
-	"gopkg.in/mgo.v2/bson"
+	"go.mongodb.org/mongo-driver/v2/bson"
+	"regexp"
 	"strconv"
+	"sync"
 	"time"
 )
 
@@ -80,19 +82,20 @@ func (self *Time) UnmarshalJSON(data []byte) (err error) {
 	return
 }
 
-func (self Time) GetBSON() (interface{}, error) {
+func (self Time) MarshalBSONValue() (byte, []byte, error) {
 	if self.IsZero() {
-		return nil, nil
+		return byte(bson.TypeNull), nil, nil
 
 	} else {
-		return self.Format(TIME_FORMAT_MICRO), nil
+		typ, data, err := bson.MarshalValue(self.Format(TIME_FORMAT_MICRO))
+		return byte(typ), data, err
 	}
 }
 
-func (self *Time) SetBSON(raw bson.Raw) (err error) {
+func (self *Time) UnmarshalBSONValue(typ byte, data []byte) (err error) {
 	var decoded interface{}
 
-	err = raw.Unmarshal(&decoded)
+	err = bson.UnmarshalValue(bson.Type(typ), data, &decoded)
 
 	if err != nil {
 		self.Time = time.Time{}
@@ -159,19 +162,20 @@ func (self *Sequence) UnmarshalJSON(data []byte) (err error) {
 	return self.UnmarshalText(data)
 }
 
-func (self Sequence) GetBSON() (interface{}, error) {
+func (self Sequence) MarshalBSONValue() (byte, []byte, error) {
 	if !self.Set {
-		return nil, nil
+		return byte(bson.TypeNull), nil, nil
 
 	} else {
-		return self.Value, nil
+		typ, data, err := bson.MarshalValue(self.Value)
+		return byte(typ), data, err
 	}
 }
 
-func (self *Sequence) SetBSON(raw bson.Raw) (err error) {
+func (self *Sequence) UnmarshalBSONValue(typ byte, data []byte) (err error) {
 	var decoded interface{}
 
-	err = raw.Unmarshal(&decoded)
+	err = bson.UnmarshalValue(bson.Type(typ), data, &decoded)
 
 	if err != nil {
 		*self = Sequence{}
@@ -193,6 +197,10 @@ func (self *Sequence) SetBSON(raw bson.Raw) (err error) {
 	}
 
 	return
+}
+
+func (self Sequence) IsZero() bool {
+	return !self.Set
 }
 
 // OpenParam defines the dataset that is used by the /open method of the bus.
@@ -296,32 +304,71 @@ func (self *Payload) UnmarshalJSON(data []byte) error {
 	return json.Unmarshal(data, &self.Data)
 }
 
-func (self Payload) GetBSON() (interface{}, error) {
-	return self.Data, nil
+func (self Payload) MarshalBSONValue() (byte, []byte, error) {
+	if self.Data == nil {
+		return byte(bson.TypeNull), nil, nil
+
+	} else {
+		typ, data, err := bson.MarshalValue(self.Data)
+		return byte(typ), data, err
+	}
 }
 
-func (self *Payload) SetBSON(raw bson.Raw) (err error) {
-	// Unmarshal() seems to leave references to the original data,
-	// so make a copy of the data.
-	var rawcopy bson.Raw
-	rawcopy.Kind = raw.Kind
-	rawcopy.Data = make([]byte, len(raw.Data))
-	copy(rawcopy.Data, raw.Data)
+// Use MgoRepository to get native go types instead of bson.A, bson.M and
+// bson.Binary.
+var mgoRegistry = bson.NewMgoRegistry()
 
-	if raw.Kind == 3 {
+var decPool = sync.Pool{
+	New: func() interface{} {
+		dec := bson.NewDecoder(nil)
+		dec.SetRegistry(mgoRegistry)
+		return dec
+	},
+}
+
+func (self *Payload) UnmarshalBSONValue(typ byte, data []byte) (err error) {
+	switch bson.Type(typ) {
+	case bson.TypeEmbeddedDocument:
 		// Data contains a BSON document. Anything else than
 		// map[string]interface{} is ignored by the filter.
 		var decoded map[string]interface{}
-		err = rawcopy.Unmarshal(&decoded)
-		self.Data = decoded
 
-	} else {
-		var decoded interface{}
-		err = rawcopy.Unmarshal(&decoded)
-		self.Data = decoded
+		dec := decPool.Get().(*bson.Decoder)
+		defer decPool.Put(dec)
+
+		dec.Reset(bson.NewDocumentReader(bytes.NewReader(data)))
+
+		err = dec.Decode(&decoded)
+
+		if err != nil {
+			self.Data = interface{}(nil)
+
+		} else {
+			self.Data = decoded
+		}
+
+	case bson.TypeBinary:
+		var decoded []byte
+
+		err = bson.UnmarshalValue(bson.Type(typ), data, &decoded)
+
+		if err != nil {
+			self.Data = interface{}(nil)
+
+		} else {
+			self.Data = decoded
+		}
+
+	default:
+		err = errors.New("unsupported datatype")
+		self.Data = interface{}(nil)
 	}
 
 	return
+}
+
+func (self Payload) IsZero() bool {
+	return self.Data == nil
 }
 
 // Message defines an HMB message.
@@ -330,10 +377,10 @@ type Message struct {
 	Queue     string   `json:"queue,omitempty" bson:"queue,omitempty"`
 	Sender    string   `json:"sender,omitempty" bson:"sender,omitempty"`
 	Topic     string   `json:"topic,omitempty" bson:"topic,omitempty"`
-	Seq       Sequence `json:"seq,omitempty" bson:"seq,omitempty"`
-	Starttime Time     `json:"starttime,omitempty" bson:"starttime,omitempty"`
-	Endtime   Time     `json:"endtime,omitempty" bson:"endtime,omitempty"`
-	Data      Payload  `json:"data,omitempty" bson:"data,omitempty"`
+	Seq       Sequence `json:"seq,omitempty,omitzero" bson:"seq,omitempty,omitzero"`
+	Starttime Time     `json:"starttime,omitempty,omitzero" bson:"starttime,omitempty,omitzero"`
+	Endtime   Time     `json:"endtime,omitempty,omitzero" bson:"endtime,omitempty,omitzero"`
+	Data      Payload  `json:"data,omitempty,omitzero" bson:"data,omitempty,omitzero"`
 
 	// The following fields are included for compatibility with older
 	// applications and will be removed in future versions. Any extra
@@ -341,98 +388,6 @@ type Message struct {
 	ScMessageType int `json:"scMessageType,omitempty" bson:"scMessageType,omitempty"`
 	ScContentType int `json:"scContentType,omitempty" bson:"scContentType,omitempty"`
 	Gdacs map[string]interface{} `json:"gdacs,omitempty" bson:"gdacs,omitempty"`
-}
-
-// json.Marshal() ignores "omitempty" in case of non-native types, so let's
-// serialize the fields manually.
-func appendJSON(buf []byte, key string, value interface{}) ([]byte, error) {
-	if jvalue, err := json.Marshal(value); err != nil {
-		return nil, err
-
-	} else {
-		if len(buf) > 1 {
-			buf = append(buf, ',')
-		}
-
-		buf = append(buf, []byte(`"`+key+`":`)...)
-		buf = append(buf, jvalue...)
-	}
-
-	return buf, nil
-}
-
-func (self *Message) MarshalJSON() ([]byte, error) {
-	buf := make([]byte, 1, 1024) // 1024 is initial capacity, grows as needed
-	buf[0] = '{'
-
-	var err error
-
-	if buf, err = appendJSON(buf, "type", self.Type); err != nil {
-		return nil, err
-	}
-
-	if self.Queue != "" {
-		if buf, err = appendJSON(buf, "queue", self.Queue); err != nil {
-			return nil, err
-		}
-	}
-
-	if self.Sender != "" {
-		if buf, err = appendJSON(buf, "sender", self.Sender); err != nil {
-			return nil, err
-		}
-	}
-
-	if self.Topic != "" {
-		if buf, err = appendJSON(buf, "topic", self.Topic); err != nil {
-			return nil, err
-		}
-	}
-
-	if self.Seq.Set {
-		if buf, err = appendJSON(buf, "seq", self.Seq); err != nil {
-			return nil, err
-		}
-	}
-
-	if !self.Starttime.IsZero() {
-		if buf, err = appendJSON(buf, "starttime", self.Starttime); err != nil {
-			return nil, err
-		}
-	}
-
-	if !self.Endtime.IsZero() {
-		if buf, err = appendJSON(buf, "endtime", self.Endtime); err != nil {
-			return nil, err
-		}
-	}
-
-	if self.ScMessageType != 0 {
-		if buf, err = appendJSON(buf, "scMessageType", self.ScMessageType); err != nil {
-			return nil, err
-		}
-	}
-
-	if self.ScContentType != 0 {
-		if buf, err = appendJSON(buf, "scContentType", self.ScContentType); err != nil {
-			return nil, err
-		}
-	}
-
-	if self.Gdacs != nil {
-		if buf, err = appendJSON(buf, "gdacs", self.Gdacs); err != nil {
-			return nil, err
-		}
-	}
-
-	if self.Data.Data != nil {
-		if buf, err = appendJSON(buf, "data", self.Data); err != nil {
-			return nil, err
-		}
-	}
-
-	buf = append(buf, '}')
-	return buf, nil
 }
 
 // MarshalProtobuf serializes the message in Protobuf format. Protobuf is used
@@ -464,8 +419,12 @@ func (self *Message) MarshalProtobuf(pb *proto.Buffer) error {
 	} else if data, ok := self.Data.Data.(map[string]interface{}); ok {
 		pm.DataType = ProtoMessage_BSON.Enum()
 
-		if pm.Data, err = bson.Marshal(data); err != nil {
+		var typ bson.Type
+		if typ, pm.Data, err = bson.MarshalValue(data); err != nil {
 			return err
+
+		} else if typ != bson.TypeEmbeddedDocument {
+			return errors.New("unexpected BSON type")
 		}
 
 	} else {
@@ -502,7 +461,7 @@ func (self *Message) UnmarshalProtobuf(pb *proto.Buffer) error {
 		self.Data.Data = pm.GetData()
 
 	case ProtoMessage_BSON:
-		if err := bson.Unmarshal(pm.GetData(), &self.Data); err != nil {
+		if err := bson.UnmarshalValue(bson.TypeEmbeddedDocument, pm.GetData(), &self.Data); err != nil {
 			return err
 		}
 

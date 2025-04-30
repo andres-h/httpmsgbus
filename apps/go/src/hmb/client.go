@@ -16,7 +16,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"gopkg.in/mgo.v2/bson"
+	"go.mongodb.org/mongo-driver/v2/bson"
 	"io"
 	"io/ioutil"
 	"net"
