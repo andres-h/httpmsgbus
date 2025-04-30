@@ -14,7 +14,6 @@ package main
 
 import (
 	"bitbucket.org/andresh/httpmsgbus/apps/go/src/hmb"
-	"bitbucket.org/andresh/httpmsgbus/apps/go/src/regexp"
 	"bytes"
 	"encoding/binary"
 	"flag"
@@ -23,12 +22,13 @@ import (
 	_log "log"
 	"log/syslog"
 	"os"
+	"regexp"
 	"strings"
 	"syscall"
 	"time"
 )
 
-const VERSION = "0.1 (2024.010)"
+const VERSION = "0.1 (2025.120)"
 
 const (
 	PLUGINFD        = 63
