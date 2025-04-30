@@ -5,21 +5,6 @@ class Module(seiscomp.kernel.Module):
     def __init__(self, env):
         seiscomp.kernel.Module.__init__(self, env, env.moduleName(__file__))
 
-        # Default values
-        self.hmbEnable = False
-        self.hmbPort = 8000
-
-        try: self.hmbEnable = self.env.getBool("hmb.enable")
-        except: pass
-        try: self.hmbPort = self.env.getInt("hmb.port")
-        except: pass
-
-    def start(self):
-        if not self.hmbEnable:
-            return 0
-
-        seiscomp.kernel.Module.start(self)
-
     def _readConfig(self):
         cfg = seiscomp.config.Config()
 
@@ -41,7 +26,8 @@ class Module(seiscomp.kernel.Module):
         cfg = self._readConfig()
         prog = "run_with_lock"
         params = self.env.lockFile(self.name) + ' ' + self.env.binaryFile(self.name)
-        params += ' -H http://localhost:%d/wave' % self.hmbPort
+        try: params += ' -H %s' % cfg.getString('hmbAddress')
+        except: params += ' -H http://localhost:8000/wave'
         try: params += ' -O "%s"' % cfg.getString('organization')
         except: pass
         try: params += ' -P %s' % cfg.getString('port')

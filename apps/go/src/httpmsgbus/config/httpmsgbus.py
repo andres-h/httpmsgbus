@@ -2,28 +2,15 @@ from __future__ import print_function
 import os, resource
 import seiscomp.kernel, seiscomp.config
 
-class Module(seiscomp.kernel.CoreModule):
+class Module(seiscomp.kernel.Module):
     def __init__(self, env):
-        seiscomp.kernel.CoreModule.__init__(self, env, env.moduleName(__file__))
+        seiscomp.kernel.Module.__init__(self, env, env.moduleName(__file__))
+
+        # High priority
+        self.order = -1
 
         # Increase kill timeout to 40 seconds
         self.killTimeout = 40
-
-        # Default values
-        self.hmbEnable = False
-        self.hmbPort = 8000
-
-        try: self.hmbEnable = self.env.getBool("hmb.enable")
-        except: pass
-        try: self.hmbPort = self.env.getInt("hmb.port")
-        except: pass
-
-    def start(self):
-        if not self.hmbEnable:
-            print("[kernel] HMB is disabled by config")
-            return 0
-
-        seiscomp.kernel.CoreModule.start(self)
 
     def _readConfig(self):
         cfg = seiscomp.config.Config()
@@ -56,7 +43,8 @@ class Module(seiscomp.kernel.CoreModule):
         cfg = self._readConfig()
         prog = "run_with_lock"
         params = self.env.lockFile(self.name) + ' ' + self.env.binaryFile(self.name)
-        params += ' -P %d' % self.hmbPort
+        try: params += ' -P %d' % cfg.getString('port')
+        except: pass
         try: params += ' -D "%s"' % cfg.getString('database')
         except: pass
         try: params += ' -b %d' % cfg.getInt('bufferSize')

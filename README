@@ -2,15 +2,6 @@ httpmsgbus (HMB) can be used as a standalone program or as an add-on to
 SeisComP [1]; the code can be installed using the install.sh script.
 Go compiler [2] is required to compile the code.
 
-Libpcre (pcre-devel, libpcre3-dev or similar Linux package) is also
-required.
-
-In SeisComP, HMB is disabled by default and can be enabled by adding the
-following options to ~/seiscomp/etc/kernel.cfg:
-
-hmb.enable = true
-hmb.port = 8000
-
 The distribution includes an alternative Seedlink implementation consisting
 of "hmbseedlink" and "wavefeed" modules, which can used as a drop-in
 replacement for the standard "seedlink" module. Normal seedlink bindings

@@ -3,6 +3,11 @@
 	<module name="wavefeed" category="Acquisition" standalone="true">
 		<description>Client that feeds waveform data to the HMB.</description>
 		<configuration>
+			<parameter name="hmbAddress" type="string" default="http://localhost:8000/wave">
+				<description>
+				Destination HMB URL.
+				</description>
+			</parameter>
 			<parameter name="unreliableChannelsRegex" type="string" default="_AE|_[^D]$">
 				<description>
 				Regex matching channels (in 00_BHZ_D format) with unreliable timestamps.

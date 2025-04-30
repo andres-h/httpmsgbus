@@ -119,21 +119,6 @@ class Module(seiscomp.kernel.Module):
         self.rcdir = os.path.join(self.env.SEISCOMP_ROOT, "var", "lib", "rc")
         self.seedlink_station_descr = {}
 
-        # Default values
-        self.hmbEnable = False
-        self.hmbPort = 8000
-
-        try: self.hmbEnable = self.env.getBool("hmb.enable")
-        except: pass
-        try: self.hmbPort = self.env.getInt("hmb.port")
-        except: pass
-
-    def start(self):
-        if not self.hmbEnable:
-            return 0
-
-        seiscomp.kernel.Module.start(self)
-
     def _readConfig(self):
         cfg = seiscomp.config.Config()
 
@@ -159,7 +144,8 @@ class Module(seiscomp.kernel.Module):
         pconf = os.path.join(self.env.SEISCOMP_ROOT, "var", "lib", "seedlink", "chain0.xml")
         psys = ' -D' if self.env.syslog else ''
         params += ' -C "%s%s -f %s chain0"' % (pbin, psys, pconf)
-        params += ' -H http://localhost:%d/wave' % self.hmbPort
+        try: params += ' -H %s' % cfg.getString('hmbAddress')
+        except: params += ' -H http://localhost:8000/wave'
         try: params += ' -X "%s"' % cfg.getString('unreliableChannelsRegex')
         except: params += ' -X "_AE|_[^D]$"'
         try: params += ' -b %d' % cfg.getInt('bufferSize')
@@ -198,12 +184,8 @@ class Module(seiscomp.kernel.Module):
         return description
 
     def updateConfig(self):
-        # If HMB is disabled, do not do anything
-        if not self.hmbEnable:
-            print("- HMB is disabled, nothing to do")
+        if self.env.tryLock("httpmsgbus") or not self.env.isModuleEnabled("wavefeed"):
             return 0
-
-        hmbAddr = "http://localhost:%d/wave" % self.hmbPort
 
         # Initialize the basic directories
         descdir = os.path.join(self.env.SEISCOMP_ROOT, "etc", "descriptions")
@@ -230,7 +212,10 @@ class Module(seiscomp.kernel.Module):
         if mod is None:
             return 0
 
-        log("loading station config from hmb://localhost:%d/wave" % self.hmbPort)
+        try: hmbAddr = cfg.getString('hmbAddress')
+        except: hmbAddr = 'http://localhost:8000/wave'
+
+        log("loading station config from %s" % hmbAddr)
         stations, hmb = loadStationsHMB(hmbAddr)
 
         # Load station descriptions from inventory

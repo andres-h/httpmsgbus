@@ -3,6 +3,11 @@
 	<module name="hmbseedlink" category="Acquisition" standalone="true">
 		<description>HMB-based Real-time waveform server implementing the SeedLink protocol.</description>
 		<configuration>
+			<parameter name="hmbAddress" type="string" default="http://localhost:8000/wave">
+				<description>
+				Source HMB URL.
+				</description>
+			</parameter>
 			<parameter name="port" type="int" default="18000">
 				<description>
 				TCP port that the server is running on.

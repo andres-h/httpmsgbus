@@ -3,6 +3,11 @@
 	<module name="httpmsgbus" category="Messaging" standalone="true">
 		<description>HTTP message bus.</description>
 		<configuration>
+			<parameter name="port" type="int" default="8000">
+				<description>
+				TCP port to accept requests.
+				</description>
+			</parameter>
 			<parameter name="database" type="string">
 				<description>
 				URL of the backing database (mongodb:// or filedb://).
