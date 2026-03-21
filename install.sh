@@ -1,6 +1,9 @@
 #!/bin/sh -e
 
 cd "`dirname "$0"`"
+
+make -C apps/go/src/hmbseedlink/libmseed
+
 export GOPATH="`pwd`/build"
 
 compile() {

@@ -1,0 +1,3 @@
+[submodule "apps/go/src/hmbseedlink/libmseed"]
+	path = apps/go/src/hmbseedlink/libmseed
+	url = https://github.com/EarthScope/libmseed.git
