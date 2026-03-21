@@ -19,6 +19,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"regexp"
 	"sort"
 	"sync"
 	"time"
@@ -92,13 +93,13 @@ func NewMaster(softwareId string, organization string, source string, timeout in
 	return self
 }
 
-func (self *Master) Println(v ...interface{}) {
-	args := make([]interface{}, 1, len(v)+1)
+func (self *Master) Println(v ...any) {
+	args := make([]any, 1, len(v)+1)
 	args[0] = "[master]"
 	log.Println(append(args, v...)...)
 }
 
-func (self *Master) Printf(format string, v ...interface{}) {
+func (self *Master) Printf(format string, v ...any) {
 	self.Println(fmt.Sprintf(format, v...))
 }
 
@@ -138,7 +139,7 @@ func (self *Master) start() {
 		} else if m == nil || m.Type != "STATION_CONFIG" {
 			continue
 
-		} else if data, ok := m.Data.Data.(map[string]interface{}); !ok {
+		} else if data, ok := m.Data.Data.(map[string]any); !ok {
 			self.Println("invalid STATION_CONFIG message")
 
 		} else if networkCode, ok := data["networkCode"].(string); !ok {
@@ -150,7 +151,7 @@ func (self *Master) start() {
 		} else if desc, ok := data["description"].(string); !ok {
 			self.Println("invalid STATION_CONFIG message (description)")
 
-		} else if access, ok := data["access"].([]interface{}); !ok {
+		} else if access, ok := data["access"].([]any); !ok {
 			self.Println("invalid STATION_CONFIG message (access)")
 
 		} else {
@@ -243,8 +244,12 @@ func (self *Master) StationConfig(key StationKey) *StationConfig {
 	return self.stations[key]
 }
 
-func (self *Master) InfoRequest(level int, seedname string, ip net.IP, w *bufio.Writer, mutex *sync.Mutex) *InfoGenerator {
-	return NewInfoGenerator(level, seedname, ip, w, mutex, self, self.infoCache)
+func (self *Master) MSEEDInfoRequest(level int, ip net.IP, w *bufio.Writer, mutex *sync.Mutex) InfoGenerator {
+	return NewMSEEDInfoGenerator(level, ip, w, mutex, self, self.infoCache)
+}
+
+func (self *Master) JSONInfoRequest(level int, stationRx *regexp.Regexp, streamRx *regexp.Regexp, formatRx *regexp.Regexp, ip net.IP, w *bufio.Writer, mutex *sync.Mutex) InfoGenerator {
+	return NewJSONInfoGenerator(level, stationRx, streamRx, formatRx, ip, w, mutex, self, self.infoCache)
 }
 
 func (self *Master) ApproveConnection(ip net.IP) bool {

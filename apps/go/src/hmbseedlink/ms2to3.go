@@ -12,49 +12,32 @@
 
 package main
 
-import (
-	"bufio"
-	"net"
-	"regexp"
-	"sync"
-	"time"
-)
+/*
+#cgo LDFLAGS: -L${SRCDIR}/libmseed -lmseed
+#cgo CFLAGS: -I${SRCDIR}/libmseed
 
-type StationKey struct {
-	NetworkCode string
-	StationCode string
+#include <libmseed.h>
+
+static int ms2to3(const char *inptr, int inlen, char *outptr, int outlen) {
+	MS3Record *msr = NULL;
+	int retval;
+
+	if(msr3_parse(inptr, inlen, &msr, 0, 0) != MS_NOERROR)
+		return -1;
+
+	retval = msr3_repack_mseed3(msr, outptr, outlen, 0);
+	msr3_free(&msr);
+	return retval;
 }
 
-type IPNetACL []net.IPNet
+*/
+import "C"
+import "unsafe"
 
-func (self IPNetACL) Contains(ip net.IP) bool {
-	for _, v := range self {
-		if v.Contains(ip) {
-			return true
-		}
-	}
-
-	return false
-}
-
-type StationConfig struct {
-	Description string
-	ACL         IPNetACL
-}
-
-type InfoGenerator interface {
-	Do() error
-	CancelRequest()
-	ReadyWait()
-}
-
-type MasterInterface interface {
-	SoftwareId() string
-	Organization() string
-	Started() time.Time
-	StationList(net.IP) []StationKey
-	StationConfig(StationKey) *StationConfig
-	MSEEDInfoRequest(int, net.IP, *bufio.Writer, *sync.Mutex) InfoGenerator
-	JSONInfoRequest(int, *regexp.Regexp, *regexp.Regexp, *regexp.Regexp, net.IP, *bufio.Writer, *sync.Mutex) InfoGenerator
-	EndConnection(net.IP)
+func ms2to3(in []byte, out []byte) int {
+	inptr := (*C.char)(unsafe.Pointer(&in[0]))
+	inlen := C.int(len(in))
+	outptr := (*C.char)(unsafe.Pointer(&out[0]))
+	outlen := C.int(len(out))
+	return int(C.ms2to3(inptr, inlen, outptr, outlen))
 }

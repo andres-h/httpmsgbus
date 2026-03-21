@@ -16,6 +16,7 @@ import (
 	"bitbucket.org/andresh/httpmsgbus/apps/go/src/hmb"
 	"bufio"
 	"bytes"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -27,20 +28,46 @@ import (
 	"time"
 )
 
-const NSELECTORS = 100
+const (
+	TIME_FORMAT = "2006-01-02T15:04:05Z"
+	NSELECTORS  = 100
+	INACTIVITY  = 60 * time.Minute
+)
 
-var commands = []*regexp.Regexp{
-	regexp.MustCompile("^([Hh][Ee][Ll][Ll][Oo])\\s*$"),
-	regexp.MustCompile("^([Cc][Aa][Tt])\\s*$"),
-	regexp.MustCompile("^([Bb][Aa][Tt][Cc][Hh])\\s*$"),
-	regexp.MustCompile("^([Ss][Tt][Aa][Tt][Ii][Oo][Nn])\\s*([A-Z0-9]{1,5})\\s+([A-Z0-9]{1,2})\\s*$"),
-	regexp.MustCompile("^([Ss][Ee][Ll][Ee][Cc][Tt])\\s*(?:(!)?(?:([A-Z0-9\\?]{2})?([A-Z0-9\\?]{3})(?:\\.([DETCLO\\?]))?|([DETCLO])))?\\s*$"),
-	regexp.MustCompile("^([Dd][Aa][Tt][Aa])\\s*(?:([0-9A-Fa-f]{1,6})(?:\\s+(\\d{4}),(\\d{1,2}),(\\d{1,2}),(\\d{1,2}),(\\d{1,2}),(\\d{1,2}))?)?\\s*$"),
-	regexp.MustCompile("^([Ff][Ee][Tt][Cc][Hh])\\s*(?:([0-9A-Fa-f]{1,6})(?:\\s+(\\d{4}),(\\d{1,2}),(\\d{1,2}),(\\d{1,2}),(\\d{1,2}),(\\d{1,2}))?)?\\s*$"),
-	regexp.MustCompile("^([Tt][Ii][Mm][Ee])\\s*(\\d{4}),(\\d{1,2}),(\\d{1,2}),(\\d{1,2}),(\\d{1,2}),(\\d{1,2})(?:\\s+(\\d{4}),(\\d{1,2}),(\\d{1,2}),(\\d{1,2}),(\\d{1,2}),(\\d{1,2}))?\\s*$"),
-	regexp.MustCompile("^([Ee][Nn][Dd])\\s*$"),
-	regexp.MustCompile("^([Ii][Nn][Ff][Oo])\\s*([A-Za-z]+)\\s*$"),
-	regexp.MustCompile("^([Bb][Yy][Ee])\\s*$"),
+var sl3commands = []*regexp.Regexp{
+	regexp.MustCompile("(?i)^(BATCH)\\s*$"),
+	regexp.MustCompile("(?i)^(BYE)\\s*$"),
+	regexp.MustCompile("(?i)^(CAT)\\s*$"),
+	regexp.MustCompile("(?i)^(DATA)(?:\\s+([0-9A-Fa-f]{1,6})(?:\\s+(\\d{4}),(\\d{1,2}),(\\d{1,2}),(\\d{1,2}),(\\d{1,2}),(\\d{1,2}))?)?\\s*$"),
+	regexp.MustCompile("(?i)^(END)\\s*$"),
+	regexp.MustCompile("(?i)^(FETCH)(?:\\s+([0-9A-Fa-f]{1,6})(?:\\s+(\\d{4}),(\\d{1,2}),(\\d{1,2}),(\\d{1,2}),(\\d{1,2}),(\\d{1,2}))?)?\\s*$"),
+	regexp.MustCompile("(?i)^(HELLO)\\s*$"),
+	regexp.MustCompile("(?i)^(INFO)\\s+([A-Za-z]+)\\s*$"),
+	regexp.MustCompile("(?i)^(SELECT)(?:\\s+(!)?(?:([A-Z0-9\\?]{2})?([A-Z0-9\\?]{3})(?:\\.([DETCLO\\?]))?|([DETCLO])))?\\s*$"),
+	regexp.MustCompile("(?i)^(SLPROTO)\\s+([0-9.]+)\\s*$"),
+	regexp.MustCompile("(?i)^(STATION)\\s+([A-Z0-9]{1,5})\\s+([A-Z0-9]{1,2})\\s*$"),
+	regexp.MustCompile("(?i)^(TIME)\\s+(\\d{4}),(\\d{1,2}),(\\d{1,2}),(\\d{1,2}),(\\d{1,2}),(\\d{1,2})(?:\\s+(\\d{4}),(\\d{1,2}),(\\d{1,2}),(\\d{1,2}),(\\d{1,2}),(\\d{1,2}))?\\s*$"),
+}
+
+var sl4commands = []*regexp.Regexp{
+	regexp.MustCompile("(?i)^(AUTH)\\s+([A-Z]+)\\s*(\\S+)\\s*$"),
+	regexp.MustCompile("(?i)^(BYE)\\s*$"),
+	regexp.MustCompile("(?i)^(DATA)(?:\\s+([0-9]+|ALL)(?:\\s+([0-9\\-:.TZ]+)(?:\\s+([0-9\\-:.TZ]+))?)?)?\\s*$"),
+	regexp.MustCompile("(?i)^(END)\\s*$"),
+	regexp.MustCompile("(?i)^(ENDFETCH)\\s*$"),
+	regexp.MustCompile("(?i)^(HELLO)\\s*$"),
+	regexp.MustCompile("(?i)^(INFO)\\s+([A-Z]+)(?:\\s+([A-Z0-9_*?]+)(?:\\s+([A-Z0-9_*?]+)(?:\\.([A-Z0-9*?]{1,2}))?)?)?\\s*$"),
+	regexp.MustCompile("(?i)^(SELECT)\\s+(!)?([A-Z0-9_*?]+)(?:\\.([A-Z0-9*?]{1,2}))?\\s*$"),
+	regexp.MustCompile("(?i)^(STATION)\\s+([A-Z0-9_*?]+)\\s*$"),
+	regexp.MustCompile("(?i)^(USERAGENT)\\s+(.*)\\s*$"),
+}
+
+func pat2rx(pat string) *regexp.Regexp {
+	if pat == "" {
+		return regexp.MustCompile("")
+	}
+
+	return regexp.MustCompile("^" + strings.ReplaceAll(strings.ReplaceAll(pat, "?", "."), "*", ".*") + "$")
 }
 
 type SeedlinkConnection struct {
@@ -55,9 +82,12 @@ type SeedlinkConnection struct {
 	w         *bufio.Writer
 	param     *hmb.OpenParam
 	queue     *hmb.OpenParamQueue
+	queueSet  map[string]*hmb.OpenParamQueue
+	topicSet  map[string]bool
 	hmb       *hmb.Client
-	infoGen   *InfoGenerator
+	infoGen   InfoGenerator
 	batchmode bool
+	slproto   int
 	mutex     sync.Mutex
 }
 
@@ -93,13 +123,13 @@ func NewSeedlinkConnection(master MasterInterface, conn net.Conn, ip net.IP, sou
 	return self
 }
 
-func (self *SeedlinkConnection) Println(v ...interface{}) {
-	args := make([]interface{}, 1, len(v)+1)
+func (self *SeedlinkConnection) Println(v ...any) {
+	args := make([]any, 1, len(v)+1)
 	args[0] = "[" + self.conn.RemoteAddr().String() + "]"
 	log.Println(append(args, v...)...)
 }
 
-func (self *SeedlinkConnection) Printf(format string, v ...interface{}) {
+func (self *SeedlinkConnection) Printf(format string, v ...any) {
 	self.Println(fmt.Sprintf(format, v...))
 }
 
@@ -121,9 +151,18 @@ func (self *SeedlinkConnection) _ERROR() {
 	}
 }
 
+func (self *SeedlinkConnection) _ERROR4(code, message string) {
+	errmsg := "ERROR " + code + " " + message
+	self.Println(errmsg)
+	self.mutex.Lock()
+	self.w.Write([]byte(errmsg + "\r\n"))
+	self.w.Flush()
+	self.mutex.Unlock()
+}
+
 func (self *SeedlinkConnection) _HELLO() {
 	self.mutex.Lock()
-	self.w.Write([]byte("SeedLink v3.0 [" + self.master.SoftwareId() + "]\r\n"))
+	self.w.Write([]byte("SeedLink v4.0 [" + self.master.SoftwareId() + "] :: SLPROTO:4.0\r\n"))
 	self.w.Write([]byte(self.master.Organization() + "\r\n"))
 	self.w.Flush()
 	self.mutex.Unlock()
@@ -134,7 +173,7 @@ func (self *SeedlinkConnection) _CAT() {
 
 	for _, k := range self.master.StationList(self.ip) {
 		s := self.master.StationConfig(k)
-		self.w.Write([]byte(fmt.Sprintf("%2s %-5s %s\r\n", k.NetworkCode, k.StationCode, s.Description)))
+		self.w.Write(fmt.Appendf(nil, "%2s %-5s %s\r\n", k.NetworkCode, k.StationCode, s.Description))
 	}
 
 	self.w.Write([]byte("END"))
@@ -150,6 +189,24 @@ func (self *SeedlinkConnection) _BATCH() {
 	self.mutex.Unlock()
 }
 
+func (self *SeedlinkConnection) _AUTH(string, string) {
+	self._ERROR4("ARGUMENTS", "not implemented")
+}
+
+func (self *SeedlinkConnection) _SLPROTO(proto string) {
+	if proto != "4.0" {
+		self._ERROR4("ARGUMENTS", "invalid protocol version")
+		return
+	}
+
+	self.slproto = 4
+	self._OK()
+}
+
+func (self *SeedlinkConnection) _USERAGENT(string) {
+	self._OK()
+}
+
 func (self *SeedlinkConnection) _STATION(stationCode, networkCode string) {
 	if s := self.master.StationConfig(StationKey{networkCode, stationCode}); s == nil {
 		self.Println("station not found")
@@ -163,15 +220,52 @@ func (self *SeedlinkConnection) _STATION(stationCode, networkCode string) {
 
 	} else {
 		var ok bool
-		self.queue, ok = self.param.Queue["WAVE_"+networkCode+"_"+stationCode]
+		self.queue, ok = self.param.Queue["FDSN_"+networkCode+"_"+stationCode]
 
 		if !ok {
 			self.queue = &hmb.OpenParamQueue{Seedlink: true, Qlen: self.qlen, Oowait: self.oowait}
-			self.param.Queue["WAVE_"+networkCode+"_"+stationCode] = self.queue
+			self.param.Queue["FDSN_"+networkCode+"_"+stationCode] = self.queue
 		}
 
 		self._OK()
 	}
+}
+
+func (self *SeedlinkConnection) _STATION4(station string) {
+	self.queueSet = map[string]*hmb.OpenParamQueue{}
+	self.topicSet = map[string]bool{}
+
+	if strings.ContainsAny(station, "*?") {
+		rx := pat2rx(station)
+
+		for _, k := range self.master.StationList(self.ip) {
+			if !rx.MatchString(k.NetworkCode + "_" + k.StationCode) {
+				continue
+			}
+
+			if _, ok := self.param.Queue["FDSN_"+k.NetworkCode+"_"+k.StationCode]; ok {
+				continue
+			}
+
+			self.queueSet["FDSN_"+k.NetworkCode+"_"+k.StationCode] = &hmb.OpenParamQueue{Qlen: self.qlen, Oowait: self.oowait}
+		}
+
+	} else if stationId := strings.Split(station, "_"); len(stationId) == 2 {
+		if s := self.master.StationConfig(StationKey{stationId[0], stationId[1]}); s == nil {
+			self.Println("station not found")
+
+		} else if len(s.ACL) != 0 && !s.ACL.Contains(self.ip) {
+			self.Println("access denied")
+
+		} else if _, ok := self.param.Queue["FDSN_"+station]; ok {
+			self.Println("station already requested")
+
+		} else {
+			self.queueSet["FDSN_"+station] = &hmb.OpenParamQueue{Qlen: self.qlen, Oowait: self.oowait}
+		}
+	}
+
+	self._OK()
 }
 
 func (self *SeedlinkConnection) _SELECT(neg, loc, cha, ext string) {
@@ -199,16 +293,54 @@ func (self *SeedlinkConnection) _SELECT(neg, loc, cha, ext string) {
 		}
 
 		if cha == "" {
-			cha = "*"
+			cha = "???"
 		}
 
 		if ext == "" {
-			ext = "*"
+			ext = "?"
 		}
 
-		self.queue.Topics = append(self.queue.Topics, neg+loc+"_"+cha+"_"+ext)
+		cha = cha[0:1] + "_" + cha[1:2] + "_" + cha[2:3]
+		self.queue.Topics = append(self.queue.Topics, neg+loc+"_"+cha+"_2"+ext)
 		self._OK()
 	}
+}
+
+func (self *SeedlinkConnection) _SELECT4(neg, stream, format string) {
+	if self.queueSet == nil {
+		self._ERROR4("UNEXPECTED", "no station selected")
+		return
+	}
+
+	var _topic string
+
+	if pat2rx(format + "*").MatchString("3D") { // in SL4 mode we provide 3D only
+		_topic = stream + "_?D"
+
+	} else {
+		_topic = "notexist"
+	}
+
+	if !self.topicSet[neg+_topic] {
+		self.topicSet[neg+_topic] = true
+
+		for _, q := range self.queueSet {
+			if len(q.Topics) >= NSELECTORS {
+				self._ERROR4("UNEXPECTED", "maximum number of selectors exceeded")
+				return
+			}
+		}
+
+		for _, q := range self.queueSet {
+			if q.Topics == nil {
+				q.Topics = make([]string, 0, NSELECTORS)
+			}
+
+			q.Topics = append(q.Topics, neg+_topic)
+		}
+	}
+
+	self._OK()
 }
 
 func makeTime(t []string) (hmb.Time, error) {
@@ -319,48 +451,148 @@ func (self *SeedlinkConnection) _TIME(year1, month1, day1, hour1, min1, sec1, ye
 	self.dataFetchTime(true, "0", starttime, endtime)
 }
 
+func (self *SeedlinkConnection) _DATA4(seq, starttime, endtime string) {
+	if self.queueSet == nil {
+		self._ERROR4("UNEXPECTED", "no station selected")
+		return
+	}
+
+	var _seq hmb.Sequence
+	var _starttime, _endtime hmb.Time
+
+	if seq != "" {
+		if strings.ToUpper(seq) == "ALL" {
+			_seq = hmb.Sequence{0, true}
+
+		} else if len(self.queueSet) > 1 {
+			self._ERROR4("ARGUMENTS", "using sequence number with station wildcard is not supported")
+			return
+
+		} else if seq, err := strconv.ParseInt(seq, 10, 64); err != nil {
+			self.Println(err)
+			self._ERROR4("ARGUMENTS", "invalid sequence number")
+			return
+
+		} else {
+			_seq = hmb.Sequence{seq, true}
+		}
+
+	}
+
+	if starttime != "" {
+		if starttime, err := time.Parse(TIME_FORMAT, starttime); err != nil {
+			self.Println(err)
+			self._ERROR4("ARGUMENTS", "invalid start time")
+			return
+
+		} else {
+			_starttime = hmb.Time{starttime}
+		}
+
+	}
+
+	if endtime != "" {
+		if endtime, err := time.Parse(TIME_FORMAT, endtime); err != nil {
+			self.Println(err)
+			self._ERROR4("ARGUMENTS", "invalid end time")
+			return
+
+		} else {
+			_endtime = hmb.Time{endtime}
+		}
+	}
+
+	for i, q := range self.queueSet {
+		q.Seq = _seq
+		q.Starttime = _starttime
+		q.Endtime = _endtime
+		self.param.Queue[i] = q
+	}
+
+	self._OK()
+}
+
 func (self *SeedlinkConnection) _END() {
 	self.hmb = hmb.NewClient(self.source, self.ip, self.param, self.timeout, self.retryWait, self)
 	go self.dataServe(self.hmb)
 }
 
-func (self *SeedlinkConnection) _INFO(arg string) {
-	var level int
-	var seedname string
+func (self *SeedlinkConnection) _END4(fetch bool) {
+	var keep bool = !fetch
 
-	switch strings.ToUpper(arg) {
+	for _, q := range self.param.Queue {
+		q.Keep = &keep
+	}
+
+	self.hmb = hmb.NewClient(self.source, self.ip, self.param, self.timeout, self.retryWait, self)
+	go self.dataServe(self.hmb)
+}
+
+func (self *SeedlinkConnection) _INFO(item string) {
+	if self.infoGen != nil {
+		self.infoGen.ReadyWait()
+	}
+
+	var level int
+
+	switch strings.ToUpper(item) {
 	case "ID":
-		level = 0
-		seedname = "INF"
+		level = INFO_ID
 
 	case "CAPABILITIES":
-		level = 0
-		seedname = "INF"
+		level = INFO_CAPABILITIES
 
 	case "STATIONS":
-		level = 1
-		seedname = "INF"
+		level = INFO_STATIONS
 
 	case "STREAMS":
-		level = 2
-		seedname = "INF"
+		level = INFO_STREAMS
 
 	default:
 		self.Println("unsupported info level")
-		level = 0
-		seedname = "ERR"
+		level = INFO_ERROR
 	}
 
+	self.infoGen = self.master.MSEEDInfoRequest(level, self.ip, self.w, &self.mutex)
+	go self.infoServe(self.infoGen)
+}
+
+func (self *SeedlinkConnection) _INFO4(item, station, stream, format string) {
 	if self.infoGen != nil {
-		self.infoGen.CancelRequest()
+		self.infoGen.ReadyWait()
 	}
 
-	self.infoGen = self.master.InfoRequest(level, seedname, self.ip, self.w, &self.mutex)
+	var level int
+
+	switch strings.ToUpper(item) {
+	case "ID":
+		level = INFO_ID
+
+	case "FORMATS":
+		level = INFO_FORMATS
+
+	case "CAPABILITIES":
+		level = INFO_CAPABILITIES
+
+	case "STATIONS":
+		level = INFO_STATIONS
+
+	case "STREAMS":
+		level = INFO_STREAMS
+
+	default:
+		self.Println("unsupported info level")
+		level = INFO_ERROR
+	}
+
+	self.infoGen = self.master.JSONInfoRequest(level, pat2rx(station), pat2rx(stream), pat2rx(format+"*"), self.ip, self.w, &self.mutex)
 	go self.infoServe(self.infoGen)
 }
 
 func (self *SeedlinkConnection) dataServe(h *hmb.Client) {
 	defer h.Close()
+
+	buf := [1024]byte{'S', 'E', '3', 'D'}
 
 	var m *hmb.Message
 	var err error
@@ -391,10 +623,63 @@ func (self *SeedlinkConnection) dataServe(h *hmb.Client) {
 			if data, ok := m.Data.Data.([]byte); !ok {
 				self.Println("invalid MSEED message")
 
+			} else if m.Queue[:5] != "FDSN_" {
+				self.Println("invalid queue:", m.Queue)
+
+			} else if self.slproto == 4 {
+				stationId := m.Queue[5:]
+				idlen := len(stationId)
+				binary.LittleEndian.PutUint64(buf[8:16], uint64(m.Seq.Value))
+				buf[16] = byte(idlen)
+				copy(buf[17:], stationId)
+
+				if strings.HasSuffix(m.Topic, "_2D") {
+					pllen := ms2to3(data, buf[17+idlen:])
+
+					if pllen >= 0 {
+						binary.LittleEndian.PutUint32(buf[4:8], uint32(pllen))
+						self.conn.SetReadDeadline(time.Now().Add(INACTIVITY))
+						self.mutex.Lock()
+
+						if _, err = self.w.Write(buf[:17+idlen+pllen]); err != nil {
+							self.Println(err)
+							self.conn.Close()
+
+						} else if err = self.w.Flush(); err != nil {
+							self.Println(err)
+							self.conn.Close()
+						}
+
+						self.mutex.Unlock()
+					}
+
+				} else {
+					binary.LittleEndian.PutUint32(buf[4:8], uint32(len(data)))
+					self.conn.SetReadDeadline(time.Now().Add(INACTIVITY))
+					self.mutex.Lock()
+
+					if _, err = self.w.Write(buf[:17+idlen]); err != nil {
+						self.Println(err)
+						self.conn.Close()
+
+					} else if _, err = self.w.Write(data); err != nil {
+						self.Println(err)
+						self.conn.Close()
+
+					} else if err = self.w.Flush(); err != nil {
+						self.Println(err)
+						self.conn.Close()
+					}
+
+					self.mutex.Unlock()
+				}
+
 			} else {
+				header := fmt.Appendf(nil, "SL%06X", m.Seq.Value&0xffffff)
+				self.conn.SetReadDeadline(time.Now().Add(INACTIVITY))
 				self.mutex.Lock()
 
-				if _, err = self.w.Write([]byte(fmt.Sprintf("SL%06X", m.Seq.Value&0xffffff))); err != nil {
+				if _, err = self.w.Write(header); err != nil {
 					self.Println(err)
 					self.conn.Close()
 
@@ -408,14 +693,12 @@ func (self *SeedlinkConnection) dataServe(h *hmb.Client) {
 				}
 
 				self.mutex.Unlock()
-
-				self.conn.SetReadDeadline(time.Now().Add(60 * time.Minute))
 			}
 		}
 	}
 }
 
-func (self *SeedlinkConnection) infoServe(infoGen *InfoGenerator) {
+func (self *SeedlinkConnection) infoServe(infoGen InfoGenerator) {
 	if err := infoGen.Do(); err != nil {
 		self.Println(err)
 		self.conn.Close()
@@ -442,7 +725,7 @@ func (self *SeedlinkConnection) start() {
 
 loop:
 	for {
-		self.conn.SetReadDeadline(time.Now().Add(60 * time.Minute))
+		self.conn.SetReadDeadline(time.Now().Add(INACTIVITY))
 
 		if !scanner.Scan() {
 			break
@@ -450,61 +733,132 @@ loop:
 
 		cmd := scanner.Text()
 
-		for _, rx := range commands {
-			if a := rx.FindStringSubmatch(cmd); a != nil {
-				self.Println(cmd)
+		if self.slproto == 4 {
+			for _, rx := range sl4commands {
+				if a := rx.FindStringSubmatch(cmd); a != nil {
+					self.Println(cmd)
 
-				kw := strings.ToUpper(a[1])
+					kw := strings.ToUpper(a[1])
 
-				if self.hmb != nil && kw != "INFO" && kw != "BYE" {
-					self.Println("exiting transfer state")
-					self.hmb.CancelRequest()
-					self.hmb = nil
+					if self.hmb != nil && kw != "INFO" && kw != "BYE" {
+						self.Println("exiting transfer state")
+						self.hmb.CancelRequest()
+						self.hmb = nil
+					}
+
+					switch kw {
+					case "AUTH":
+						self._AUTH(a[2], a[3])
+						continue loop
+
+					case "BYE":
+						break loop
+
+					case "DATA":
+						self._DATA4(a[2], a[3], a[4])
+						continue loop
+
+					case "END":
+						self._END4(false)
+						continue loop
+
+					case "ENDFETCH":
+						self._END4(true)
+						continue loop
+
+					case "HELLO":
+						self._HELLO()
+						continue loop
+
+					case "INFO":
+						self._INFO4(a[2], a[3], a[4], a[5])
+						continue loop
+
+					case "SELECT":
+						self._SELECT4(a[2], a[3], a[4])
+						continue loop
+
+					case "STATION":
+						self._STATION4(a[2])
+						continue loop
+
+					case "USERAGENT":
+						self._USERAGENT(a[2])
+						continue loop
+					}
 				}
+			}
 
-				switch kw {
-				case "HELLO":
-					self._HELLO()
-					continue loop
+		} else {
+			for _, rx := range sl3commands {
+				if a := rx.FindStringSubmatch(cmd); a != nil {
+					self.Println(cmd)
 
-				case "CAT":
-					self._CAT()
-					continue loop
+					kw := strings.ToUpper(a[1])
 
-				case "BATCH":
-					self._BATCH()
-					continue loop
+					if self.hmb != nil && kw != "INFO" && kw != "BYE" {
+						self.Println("exiting transfer state")
+						self.hmb.CancelRequest()
+						self.hmb = nil
+					}
 
-				case "STATION":
-					self._STATION(a[2], a[3])
-					continue loop
+					switch kw {
+					case "BATCH":
+						self.slproto = 3
+						self._BATCH()
+						continue loop
 
-				case "SELECT":
-					self._SELECT(a[2], a[3], a[4], a[5]+a[6])
-					continue loop
+					case "BYE":
+						break loop
 
-				case "DATA":
-					self._DATA(a[2], a[3], a[4], a[5], a[6], a[7], a[8])
-					continue loop
+					case "CAT":
+						self.slproto = 3
+						self._CAT()
+						continue loop
 
-				case "FETCH":
-					self._FETCH(a[2], a[3], a[4], a[5], a[6], a[7], a[8])
-					continue loop
+					case "DATA":
+						self.slproto = 3
+						self._DATA(a[2], a[3], a[4], a[5], a[6], a[7], a[8])
+						continue loop
 
-				case "TIME":
-					self._TIME(a[2], a[3], a[4], a[5], a[6], a[7], a[8], a[9], a[10], a[11], a[12], a[13])
-					continue loop
+					case "END":
+						self.slproto = 3
+						self._END()
+						continue loop
 
-				case "END":
-					self._END()
-					continue loop
+					case "FETCH":
+						self.slproto = 3
+						self._FETCH(a[2], a[3], a[4], a[5], a[6], a[7], a[8])
+						continue loop
 
-				case "INFO":
-					self._INFO(a[2])
-					continue loop
+					case "HELLO":
+						self._HELLO()
+						continue loop
 
-				case "BYE":
-					break loop
+					case "INFO":
+						self.slproto = 3
+						self._INFO(a[2])
+						continue loop
+
+					case "SELECT":
+						self.slproto = 3
+						self._SELECT(a[2], a[3], a[4], a[5]+a[6])
+						continue loop
+
+					case "SLPROTO":
+						self._SLPROTO(a[2])
+						continue loop
+
+					case "STATION":
+						self.slproto = 3
+						self._STATION(a[2], a[3])
+						continue loop
+
+					case "TIME":
+						self.slproto = 3
+						self._TIME(a[2], a[3], a[4], a[5], a[6], a[7], a[8], a[9], a[10], a[11], a[12], a[13])
+						continue loop
+					}
 				}
 			}
 		}
@@ -517,7 +871,12 @@ loop:
 			self.hmb = nil
 		}
 
-		self._ERROR()
+		if self.slproto == 4 {
+			self._ERROR4("UNSUPPORTED", "invalid command or syntax")
+
+		} else {
+			self._ERROR()
+		}
 	}
 
 	if err := scanner.Err(); err != nil {
