@@ -55,10 +55,18 @@ var sl4commands = []*regexp.Regexp{
 	regexp.MustCompile("(?i)^(END)\\s*$"),
 	regexp.MustCompile("(?i)^(ENDFETCH)\\s*$"),
 	regexp.MustCompile("(?i)^(HELLO)\\s*$"),
-	regexp.MustCompile("(?i)^(INFO)\\s+([A-Z]+)(?:\\s+([A-Z_*?]+)(?:\\s+([A-Z_*?]+)(?:\\.[A-Z0-9*?]{1,2})?)?)?\\s*$"),
+	regexp.MustCompile("(?i)^(INFO)\\s+([A-Z]+)(?:\\s+([A-Z_*?]+)(?:\\s+([A-Z_*?]+)(?:\\.([A-Z0-9*?]{1,2}))?)?)?\\s*$"),
 	regexp.MustCompile("(?i)^(SELECT)\\s+(!)?([A-Z_*?]+)(?:\\.([A-Z0-9*?]{1,2}))?\\s*$"),
 	regexp.MustCompile("(?i)^(STATION)\\s+([A-Z_*?]+)\\s*$"),
 	regexp.MustCompile("(?i)^(USERAGENT)\\s+(\\S+)\\s*$"),
+}
+
+func pat2rx(pat string) *regexp.Regexp {
+	if pat == "" {
+		return regexp.MustCompile("")
+	}
+
+	return regexp.MustCompile("^" + strings.ReplaceAll(strings.ReplaceAll(pat, "?", "."), "*", ".*") + "$")
 }
 
 type SeedlinkConnection struct {
@@ -76,7 +84,7 @@ type SeedlinkConnection struct {
 	queueSet  map[string]*hmb.OpenParamQueue
 	topicSet  map[string]bool
 	hmb       *hmb.Client
-	infoGen   *InfoGenerator
+	infoGen   InfoGenerator
 	batchmode bool
 	slproto   int
 	mutex     sync.Mutex
@@ -221,45 +229,37 @@ func (self *SeedlinkConnection) _STATION(stationCode, networkCode string) {
 	}
 }
 
-func (self *SeedlinkConnection) _STATION4(stationPattern string) {
+func (self *SeedlinkConnection) _STATION4(station string) {
 	self.queueSet = map[string]*hmb.OpenParamQueue{}
 	self.topicSet = map[string]bool{}
 
-	if strings.ContainsAny(stationPattern, "*?") {
-		if rx, err := regexp.Compile(strings.ReplaceAll(strings.ReplaceAll(stationPattern,
-										   "?",
-										   "."),
-								"*",
-								".*")); err != nil {
-			 self._ERROR4("INTERNAL", err.Error())
-			 return
+	if strings.ContainsAny(station, "*?") {
+		rx := pat2rx(station)
 
-		} else {
-			for _, k := range self.master.StationList(self.ip) {
-				if !rx.MatchString(k.NetworkCode + "_" + k.StationCode) {
-					continue
-				}
-
-				if _, ok := self.param.Queue["WAVE_"+k.NetworkCode+"_"+k.StationCode]; ok {
-					continue
-				}
-
-				self.queueSet["WAVE_"+k.NetworkCode+"_"+k.StationCode] = &hmb.OpenParamQueue{Qlen: self.qlen, Oowait: self.oowait}
+		for _, k := range self.master.StationList(self.ip) {
+			if !rx.MatchString(k.NetworkCode + "_" + k.StationCode) {
+				continue
 			}
+
+			if _, ok := self.param.Queue["WAVE_"+k.NetworkCode+"_"+k.StationCode]; ok {
+				continue
+			}
+
+			self.queueSet["WAVE_"+k.NetworkCode+"_"+k.StationCode] = &hmb.OpenParamQueue{Qlen: self.qlen, Oowait: self.oowait}
 		}
 
-	} else if stationId := strings.Split(stationPattern, "_"); len(stationId) == 2 {
+	} else if stationId := strings.Split(station, "_"); len(stationId) == 2 {
 		if s := self.master.StationConfig(StationKey{stationId[0], stationId[1]}); s == nil {
 			self.Println("station not found")
 
 		} else if len(s.ACL) != 0 && !s.ACL.Contains(self.ip) {
 			self.Println("access denied")
 
-		} else if _, ok := self.param.Queue["WAVE_"+stationPattern]; ok {
+		} else if _, ok := self.param.Queue["WAVE_"+station]; ok {
 			self.Println("station already requested")
 
 		} else {
-			self.queueSet["WAVE_"+stationPattern] = &hmb.OpenParamQueue{Qlen: self.qlen, Oowait: self.oowait}
+			self.queueSet["WAVE_"+station] = &hmb.OpenParamQueue{Qlen: self.qlen, Oowait: self.oowait}
 		}
 	}
 
@@ -310,12 +310,10 @@ func (self *SeedlinkConnection) _SELECT4(neg, stream, format string) {
 	}
 
 	s := strings.Split(stream, "_")
+	rx := regexp.MustCompile("^" + strings.ReplaceAll(strings.ReplaceAll(format, "?", "."), "*", ".*"))
 
 	if len(s) == 4 && len(s[0]) <= 2 && len(s[1]) == 1 && len(s[2]) == 1 && len(s[3]) == 1 &&
-		(len(format) == 0 ||
-		(len(format) <= 2 && (format[0] == '3' || format[0] == '?' || format[0] == '*') &&
-		(len(format) == 1 || format[1] == 'D' || format[1] == '?' || format[1] == '*'))) {
-
+		rx.MatchString("3D") {
 		stream = s[0]+"_"+s[1]+s[2]+s[3]+"_D"
 
 	} else {
@@ -527,59 +525,65 @@ func (self *SeedlinkConnection) _END4(fetch bool) {
 	go self.dataServe(self.hmb)
 }
 
-func (self *SeedlinkConnection) _INFO(arg string) {
-	var level int
-	var seedname string
+func (self *SeedlinkConnection) _INFO(item string) {
+	if self.infoGen != nil {
+		self.infoGen.ReadyWait()
+	}
 
-	switch strings.ToUpper(arg) {
+	var level int
+
+	switch strings.ToUpper(item) {
 	case "ID":
-		level = 0
-		seedname = "INF"
+		level = INFO_ID
 
 	case "CAPABILITIES":
-		level = 0
-		seedname = "INF"
+		level = INFO_CAPABILITIES
 
 	case "STATIONS":
-		level = 1
-		seedname = "INF"
+		level = INFO_STATIONS
 
 	case "STREAMS":
-		level = 2
-		seedname = "INF"
+		level = INFO_STREAMS
 
 	default:
 		self.Println("unsupported info level")
-		level = 0
-		seedname = "ERR"
+		level = INFO_ERROR
 	}
 
-	if self.infoGen != nil {
-		self.infoGen.CancelRequest()
-	}
-
-	self.infoGen = self.master.InfoRequest(level, seedname, self.ip, self.w, &self.mutex)
+	self.infoGen = self.master.MSEEDInfoRequest(level, self.ip, self.w, &self.mutex)
 	go self.infoServe(self.infoGen)
 }
 
-func (self *SeedlinkConnection) _INFO4(string, string, string) {
-	buf := [1024]byte{'S', 'E', 'J', 'E'}
-	msg := `{"software":"SeedLink v4.0","organization":"GEOFON","error":{"code":"ARGUMENTS","message":"requested info level is not implemented"}}`
-	binary.LittleEndian.PutUint32(buf[4:8], uint32(len(msg)))
-	copy(buf[17:], []byte(msg))
-
-	self.mutex.Lock()
-
-	if _, err := self.w.Write(buf[:17+len(msg)]); err != nil {
-		self.Println(err)
-		self.conn.Close()
-
-	} else if err := self.w.Flush(); err != nil {
-		self.Println(err)
-		self.conn.Close()
+func (self *SeedlinkConnection) _INFO4(item, station, stream, format string) {
+	if self.infoGen != nil {
+		self.infoGen.ReadyWait()
 	}
 
-	self.mutex.Unlock()
+	var level int
+
+	switch strings.ToUpper(item) {
+	case "ID":
+		level = INFO_ID
+
+	case "FORMATS":
+		level = INFO_FORMATS
+
+	case "CAPABILITIES":
+		level = INFO_CAPABILITIES
+
+	case "STATIONS":
+		level = INFO_STATIONS
+
+	case "STREAMS":
+		level = INFO_STREAMS
+
+	default:
+		self.Println("unsupported info level")
+		level = INFO_ERROR
+	}
+
+	self.infoGen = self.master.JSONInfoRequest(level, pat2rx(station), pat2rx(stream), pat2rx(format), self.ip, self.w, &self.mutex)
+	go self.infoServe(self.infoGen)
 }
 
 func (self *SeedlinkConnection) dataServe(h *hmb.Client) {
@@ -668,7 +672,7 @@ func (self *SeedlinkConnection) dataServe(h *hmb.Client) {
 	}
 }
 
-func (self *SeedlinkConnection) infoServe(infoGen *InfoGenerator) {
+func (self *SeedlinkConnection) infoServe(infoGen InfoGenerator) {
 	if err := infoGen.Do(); err != nil {
 		self.Println(err)
 		self.conn.Close()
@@ -741,7 +745,7 @@ loop:
 						continue loop
 
 					case "INFO":
-						self._INFO4(a[2], a[3], a[4])
+						self._INFO4(a[2], a[3], a[4], a[5])
 						continue loop
 
 					case "SELECT":

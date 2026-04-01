@@ -15,6 +15,7 @@ package main
 import (
 	"bufio"
 	"net"
+	"regexp"
 	"sync"
 	"time"
 )
@@ -47,6 +48,7 @@ type MasterInterface interface {
 	Started() time.Time
 	StationList(net.IP) []StationKey
 	StationConfig(StationKey) *StationConfig
-	InfoRequest(int, string, net.IP, *bufio.Writer, *sync.Mutex) *InfoGenerator
+	MSEEDInfoRequest(int, net.IP, *bufio.Writer, *sync.Mutex) InfoGenerator
+	JSONInfoRequest(int, *regexp.Regexp, *regexp.Regexp, *regexp.Regexp, net.IP, *bufio.Writer, *sync.Mutex) InfoGenerator
 	EndConnection(net.IP)
 }

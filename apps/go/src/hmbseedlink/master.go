@@ -19,6 +19,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"regexp"
 	"sort"
 	"sync"
 	"time"
@@ -243,8 +244,12 @@ func (self *Master) StationConfig(key StationKey) *StationConfig {
 	return self.stations[key]
 }
 
-func (self *Master) InfoRequest(level int, seedname string, ip net.IP, w *bufio.Writer, mutex *sync.Mutex) *InfoGenerator {
-	return NewInfoGenerator(level, seedname, ip, w, mutex, self, self.infoCache)
+func (self *Master) MSEEDInfoRequest(level int, ip net.IP, w *bufio.Writer, mutex *sync.Mutex) InfoGenerator {
+	return NewMSEEDInfoGenerator(level, ip, w, mutex, self, self.infoCache)
+}
+
+func (self *Master) JSONInfoRequest(level int, stationRx *regexp.Regexp, streamRx *regexp.Regexp, formatRx *regexp.Regexp, ip net.IP, w *bufio.Writer, mutex *sync.Mutex) InfoGenerator {
+	return NewJSONInfoGenerator(level, stationRx, streamRx, formatRx, ip, w, mutex, self, self.infoCache)
 }
 
 func (self *Master) ApproveConnection(ip net.IP) bool {

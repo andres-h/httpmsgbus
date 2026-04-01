@@ -16,17 +16,26 @@ import (
 	"bitbucket.org/andresh/httpmsgbus/apps/go/src/hmb"
 	"bufio"
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"net"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
 )
 
 const (
-	RECLEN    = 512
-	DATASTART = 64
-	TIMEFMT   = "2006/01/02 15:04:05.0000"
+	TIMEFMT           = "2006/01/02 15:04:05.0000"
+	MS2_RECLEN        = 512
+	MS2_DATASTART     = 64
+	INFO_ERROR        = -1
+	INFO_ID           = 0
+	INFO_FORMATS      = 1
+	INFO_CAPABILITIES = 2
+	INFO_STATIONS     = 3
+	INFO_STREAMS      = 4
+	INFO_CONNECTIONS  = 5
 )
 
 type InfoCache struct {
@@ -91,7 +100,13 @@ func (self *InfoCache) Request(cancel <-chan struct{}) (map[string]*hmb.QueueInf
 	}
 }
 
-type InfoGenerator struct {
+type InfoGenerator interface {
+	Do() error
+	CancelRequest()
+	ReadyWait()
+}
+
+type MSEEDInfoGenerator struct {
 	level    int
 	seedname string
 	ip       net.IP
@@ -100,22 +115,28 @@ type InfoGenerator struct {
 	master   MasterInterface
 	cache    *InfoCache
 	cancel   chan struct{}
-	rec      [RECLEN]byte
+	ready    chan struct{}
+	rec      [MS2_RECLEN]byte
 	recno    int
 	i        int
 }
 
-func NewInfoGenerator(level int, seedname string, ip net.IP, w *bufio.Writer, mutex *sync.Mutex, master MasterInterface, cache *InfoCache) *InfoGenerator {
-	self := &InfoGenerator{
+func NewMSEEDInfoGenerator(level int, ip net.IP, w *bufio.Writer, mutex *sync.Mutex, master MasterInterface, cache *InfoCache) InfoGenerator {
+	self := &MSEEDInfoGenerator{
 		level:    level,
-		seedname: seedname,
 		ip:       ip,
 		w:        w,
 		mutex:    mutex,
 		master:   master,
 		cache:    cache,
 		cancel:   make(chan struct{}),
-		i:        DATASTART,
+		i:        MS2_DATASTART,
+	}
+
+	seedname := "INF"
+
+	if level == INFO_ERROR {
+		seedname = "ERR"
 	}
 
 	for i := 0; i < 20; i++ {
@@ -125,7 +146,7 @@ func NewInfoGenerator(level int, seedname string, ip net.IP, w *bufio.Writer, mu
 	self.rec[6] = 'D'
 	copy(self.rec[15:18], seedname)
 	self.rec[39] = byte(1)
-	self.rec[45] = byte(DATASTART)
+	self.rec[45] = byte(MS2_DATASTART)
 	self.rec[47] = byte(48)
 	self.rec[48] = byte(3)
 	self.rec[49] = byte(232)
@@ -135,7 +156,7 @@ func NewInfoGenerator(level int, seedname string, ip net.IP, w *bufio.Writer, mu
 	return self
 }
 
-func (self *InfoGenerator) flush(final bool) error {
+func (self *MSEEDInfoGenerator) flush(final bool) error {
 	t := time.Now().UTC()
 	copy(self.rec[0:6], []byte(fmt.Sprintf("%06d", self.recno)))
 	binary.BigEndian.PutUint16(self.rec[20:22], uint16(t.Year()))
@@ -144,9 +165,9 @@ func (self *InfoGenerator) flush(final bool) error {
 	self.rec[25] = byte(t.Minute())
 	self.rec[26] = byte(t.Second())
 	binary.BigEndian.PutUint16(self.rec[28:30], uint16(t.Nanosecond()/100000))
-	binary.BigEndian.PutUint16(self.rec[30:32], uint16(self.i-DATASTART))
+	binary.BigEndian.PutUint16(self.rec[30:32], uint16(self.i-MS2_DATASTART))
 
-	for i := self.i; i < RECLEN; i++ {
+	for i := self.i; i < MS2_RECLEN; i++ {
 		self.rec[i] = 0
 	}
 
@@ -174,12 +195,12 @@ func (self *InfoGenerator) flush(final bool) error {
 		return err
 	}
 
-	self.i = DATASTART
+	self.i = MS2_DATASTART
 	self.recno++
 	return nil
 }
 
-func (self *InfoGenerator) write(b []byte) (int, error) {
+func (self *MSEEDInfoGenerator) write(b []byte) (int, error) {
 	n := 0
 
 	for n < len(b) {
@@ -189,7 +210,7 @@ func (self *InfoGenerator) write(b []byte) (int, error) {
 		default:
 		}
 
-		if self.i == RECLEN {
+		if self.i == MS2_RECLEN {
 			if err := self.flush(false); err != nil {
 				return n, err
 			}
@@ -197,8 +218,8 @@ func (self *InfoGenerator) write(b []byte) (int, error) {
 
 		size := len(b) - n
 
-		if size > RECLEN-self.i {
-			size = RECLEN - self.i
+		if size > MS2_RECLEN-self.i {
+			size = MS2_RECLEN - self.i
 		}
 
 		copy(self.rec[self.i:self.i+size], b[n:n+size])
@@ -210,7 +231,7 @@ func (self *InfoGenerator) write(b []byte) (int, error) {
 	return n, nil
 }
 
-func (self *InfoGenerator) infoLevel2(q *hmb.QueueInfo) error {
+func (self *MSEEDInfoGenerator) streams(q *hmb.QueueInfo) error {
 	for k, t := range q.Topic {
 		var loc, cha, ext string
 
@@ -248,7 +269,7 @@ func (self *InfoGenerator) infoLevel2(q *hmb.QueueInfo) error {
 	return nil
 }
 
-func (self *InfoGenerator) infoLevel1() error {
+func (self *MSEEDInfoGenerator) stations() error {
 	queues, err := self.cache.Request(self.cancel)
 
 	if err != nil {
@@ -268,7 +289,7 @@ func (self *InfoGenerator) infoLevel1() error {
 			k.StationCode, k.NetworkCode, s.Description, q.Startseq.Value&0xffffff, q.Endseq.Value&0xffffff))); err != nil {
 			return err
 
-		} else if self.level == 1 {
+		} else if self.level == INFO_STATIONS {
 			if _, err := self.write([]byte("/>")); err != nil {
 				return err
 			}
@@ -278,7 +299,7 @@ func (self *InfoGenerator) infoLevel1() error {
 				return err
 			}
 
-			if err := self.infoLevel2(q); err != nil {
+			if err := self.streams(q); err != nil {
 				return err
 			}
 
@@ -291,7 +312,7 @@ func (self *InfoGenerator) infoLevel1() error {
 	return nil
 }
 
-func (self *InfoGenerator) infoLevel0() error {
+func (self *MSEEDInfoGenerator) generate() error {
 	if _, err := self.write([]byte("<?xml version=\"1.0\"?>")); err != nil {
 		return err
 
@@ -301,13 +322,15 @@ func (self *InfoGenerator) infoLevel0() error {
 		self.master.Started().Format(TIMEFMT)))); err != nil {
 		return err
 
-	} else if self.level == 0 {
+	} else if self.level == INFO_CAPABILITIES {
 		if _, err := self.write([]byte("<capability name=\"dialup\"/><capability name=\"multistation\"/><capability name=\"window-extraction\"/><capability name=\"info:id\"/><capability name=\"info:capabilities\"/><capability name=\"info:stations\"/><capability name=\"info:streams\"/>")); err != nil {
 			return err
 		}
 
-	} else if err := self.infoLevel1(); err != nil {
-		return err
+	} else if self.level >= INFO_STATIONS {
+		if err := self.stations(); err != nil {
+			return err
+		}
 	}
 
 	if _, err := self.write([]byte("</seedlink>")); err != nil {
@@ -317,8 +340,10 @@ func (self *InfoGenerator) infoLevel0() error {
 	return nil
 }
 
-func (self *InfoGenerator) Do() error {
-	if err := self.infoLevel0(); err != nil {
+func (self *MSEEDInfoGenerator) Do() error {
+	defer close(self.ready)
+
+	if err := self.generate(); err != nil {
 		return err
 	}
 
@@ -329,6 +354,273 @@ func (self *InfoGenerator) Do() error {
 	return nil
 }
 
-func (self *InfoGenerator) CancelRequest() {
+func (self *MSEEDInfoGenerator) CancelRequest() {
 	close(self.cancel)
+}
+
+func (self *MSEEDInfoGenerator) ReadyWait() {
+	<-self.ready
+}
+
+type ErrorInfo struct {
+	Code    string                       `json:"code"`
+	Message string                       `json:"message"`
+}
+
+type FormatInfo struct {
+	Mimetype  string                     `json:"mimetype"`
+	Subformat map[string]string          `json:"subformat"`
+}
+
+type StreamInfo struct {
+	Id        string                     `json:"id"`
+	Format    string                     `json:"format"`
+	Subformat string                     `json:"subformat"`
+	Starttime string                     `json:"start_time"`
+	Endtime   string                     `json:"end_time"`
+}
+
+type StationInfo struct {
+	Id          string                   `json:"id"`
+	Description string                   `json:"description"`
+	Startseq    int64                    `json:"start_seq"`
+	Endseq      int64                    `json:"end_seq"`
+	Backfill    int                      `json:"backfill"`
+	Stream      *[]*StreamInfo           `json:"stream,omitempty"`
+}
+
+type Info struct {
+	Software     string                  `json:"software"`
+	Organization string                  `json:"organization"`
+	Started      string                  `json:"started"`
+	Error        *ErrorInfo              `json:"error,omitempty"`
+	Format       *map[string]*FormatInfo `json:"format,omitempty"`
+	Capability   *[]string               `json:"capability,omitempty"`
+	Station      *[]*StationInfo         `json:"station,omitempty"`
+}
+
+type JSONInfoGenerator struct {
+	level     int
+	stationRx *regexp.Regexp
+	streamRx  *regexp.Regexp
+	formatRx  *regexp.Regexp
+	ip        net.IP
+	w         *bufio.Writer
+	mutex     *sync.Mutex
+	master    MasterInterface
+	cache     *InfoCache
+	cancel    chan struct{}
+	ready     chan struct{}
+	info      Info
+}
+
+func NewJSONInfoGenerator(level int, stationRx *regexp.Regexp, streamRx *regexp.Regexp, formatRx *regexp.Regexp, ip net.IP, w *bufio.Writer, mutex *sync.Mutex, master MasterInterface, cache *InfoCache) *JSONInfoGenerator {
+	self := &JSONInfoGenerator{
+		level:      level,
+		stationRx:  stationRx,
+		streamRx:   streamRx,
+		formatRx:   formatRx,
+		ip:         ip,
+		w:          w,
+		mutex:      mutex,
+		master:     master,
+		cache:      cache,
+		cancel:     make(chan struct{}),
+		ready:      make(chan struct{}),
+	}
+
+	return self
+}
+
+func (self *JSONInfoGenerator) stations(addStreams bool) error {
+	queues, err := self.cache.Request(self.cancel)
+
+	if err != nil {
+		return err
+	}
+
+	self.info.Station = &[]*StationInfo{}
+
+	for _, k := range self.master.StationList(self.ip) {
+		if !self.stationRx.MatchString(k.NetworkCode+"_"+k.StationCode) {
+			continue
+		}
+
+		s := self.master.StationConfig(k)
+		station := &StationInfo{
+			Id:          k.NetworkCode+"_"+k.StationCode,
+			Description: s.Description,
+			Startseq:    0,
+			Endseq:      0,
+			Backfill:    -1,
+		}
+
+		if q, ok := queues["WAVE_"+k.NetworkCode+"_"+k.StationCode]; ok {
+			station.Startseq = q.Startseq.Value
+			station.Endseq = q.Endseq.Value
+
+			if addStreams {
+				station.Stream = &[]*StreamInfo{}
+
+				for k, t := range q.Topic {
+					if len(k) < 5 || k[len(k)-2:] != "_D" {
+						continue
+					}
+
+					streamId := k[:len(k)-2]
+
+					if !self.streamRx.MatchString(streamId) {
+						continue
+					}
+
+					if !self.formatRx.MatchString("3D") {
+						continue
+					}
+
+					var stime, etime string
+
+					if !t.Starttime.IsZero() {
+						stime = t.Starttime.Format(TIMEFMT)
+
+					} else {
+						stime = q.Starttime.Format(TIMEFMT)
+					}
+
+					if !t.Endtime.IsZero() {
+						etime = t.Endtime.Format(TIMEFMT)
+
+					} else {
+						etime = q.Endtime.Format(TIMEFMT)
+					}
+
+					*station.Stream = append(*station.Stream, &StreamInfo{
+						Id:        streamId,
+						Format:     "3",
+						Subformat: "D",
+						Starttime: stime,
+						Endtime:   etime,
+					})
+				}
+			}
+		}
+
+		*self.info.Station = append(*self.info.Station, station)
+	}
+
+	return nil
+}
+
+func (self *JSONInfoGenerator) capabilities() error {
+	self.info.Capability = &[]string{"SLPROTO:4.0", "TIME"}
+	return nil
+}
+
+func (self *JSONInfoGenerator) formats() error {
+	self.info.Format = &map[string]*FormatInfo{
+		"3": &FormatInfo{
+			Mimetype: "application/vnd.fdsn.mseed3",
+			Subformat: map[string]string{
+				"D": "data/generic",
+			},
+		},
+	}
+
+	return nil
+}
+
+func (self *JSONInfoGenerator) collect() error {
+	self.info.Software = self.master.SoftwareId()
+	self.info.Organization = self.master.Organization()
+	self.info.Started = self.master.Started().Format(TIMEFMT)
+
+	addStreams := false
+
+	switch self.level {
+	case INFO_STREAMS:
+		addStreams = true
+		fallthrough
+
+	case INFO_STATIONS:
+		if err := self.stations(addStreams); err != nil {
+			return err
+		}
+		fallthrough
+
+	case INFO_CAPABILITIES:
+		if err := self.capabilities(); err != nil {
+			return err
+		}
+		fallthrough
+
+	case INFO_FORMATS:
+		if err := self.formats(); err != nil {
+			return err
+		}
+		fallthrough
+
+	case INFO_ID:
+		return nil
+
+	case INFO_CONNECTIONS:
+		fallthrough
+
+	default:
+		self.info.Error = &ErrorInfo{"ARGUMENTS", "requested item is not available"};
+	}
+
+	return nil
+}
+
+func (self *JSONInfoGenerator) flush() error {
+	header := [17]byte{'S', 'E', 'J', 'I'}
+
+	if self.info.Error != nil {
+		header[3] = 'E'
+	}
+
+	if payload, err := json.Marshal(self.info); err != nil {
+		return err
+
+	} else {
+		binary.LittleEndian.PutUint32(header[4:8], uint32(len(payload)))
+
+		self.mutex.Lock()
+		defer self.mutex.Unlock()
+
+		if _, err := self.w.Write(header[:]); err != nil {
+			return err
+		}
+
+		if _, err := self.w.Write(payload); err != nil {
+			return err
+		}
+
+		if err := self.w.Flush(); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (self *JSONInfoGenerator) Do() error {
+	defer close(self.ready)
+
+	if err := self.collect(); err != nil {
+		return err
+	}
+
+	if err := self.flush(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (self *JSONInfoGenerator) CancelRequest() {
+	close(self.cancel)
+}
+
+func (self *JSONInfoGenerator) ReadyWait() {
+	<-self.ready
 }
