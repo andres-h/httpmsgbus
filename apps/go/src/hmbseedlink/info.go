@@ -117,15 +117,15 @@ type MSEEDInfoGenerator struct {
 
 func NewMSEEDInfoGenerator(level int, ip net.IP, w *bufio.Writer, mutex *sync.Mutex, master MasterInterface, cache *InfoCache) InfoGenerator {
 	self := &MSEEDInfoGenerator{
-		level:    level,
-		ip:       ip,
-		w:        w,
-		mutex:    mutex,
-		master:   master,
-		cache:    cache,
-		cancel:   make(chan struct{}),
-		ready:    make(chan struct{}),
-		i:        MS2_DATASTART,
+		level:  level,
+		ip:     ip,
+		w:      w,
+		mutex:  mutex,
+		master: master,
+		cache:  cache,
+		cancel: make(chan struct{}),
+		ready:  make(chan struct{}),
+		i:      MS2_DATASTART,
 	}
 
 	seedname := "INF"
@@ -358,30 +358,30 @@ func (self *MSEEDInfoGenerator) ReadyWait() {
 }
 
 type ErrorInfo struct {
-	Code    string                       `json:"code"`
-	Message string                       `json:"message"`
+	Code    string `json:"code"`
+	Message string `json:"message"`
 }
 
 type FormatInfo struct {
-	Mimetype  string                     `json:"mimetype"`
-	Subformat map[string]string          `json:"subformat"`
+	Mimetype  string            `json:"mimetype"`
+	Subformat map[string]string `json:"subformat"`
 }
 
 type StreamInfo struct {
-	Id        string                     `json:"id"`
-	Format    string                     `json:"format"`
-	Subformat string                     `json:"subformat"`
-	Starttime string                     `json:"start_time"`
-	Endtime   string                     `json:"end_time"`
+	Id        string `json:"id"`
+	Format    string `json:"format"`
+	Subformat string `json:"subformat"`
+	Starttime string `json:"start_time"`
+	Endtime   string `json:"end_time"`
 }
 
 type StationInfo struct {
-	Id          string                   `json:"id"`
-	Description string                   `json:"description"`
-	Startseq    int64                    `json:"start_seq"`
-	Endseq      int64                    `json:"end_seq"`
-	Backfill    int                      `json:"backfill"`
-	Stream      *[]*StreamInfo           `json:"stream,omitempty"`
+	Id          string         `json:"id"`
+	Description string         `json:"description"`
+	Startseq    int64          `json:"start_seq"`
+	Endseq      int64          `json:"end_seq"`
+	Backfill    int            `json:"backfill"`
+	Stream      *[]*StreamInfo `json:"stream,omitempty"`
 }
 
 type Info struct {
@@ -411,17 +411,17 @@ type JSONInfoGenerator struct {
 
 func NewJSONInfoGenerator(level int, stationRx *regexp.Regexp, streamRx *regexp.Regexp, formatRx *regexp.Regexp, ip net.IP, w *bufio.Writer, mutex *sync.Mutex, master MasterInterface, cache *InfoCache) *JSONInfoGenerator {
 	self := &JSONInfoGenerator{
-		level:      level,
-		stationRx:  stationRx,
-		streamRx:   streamRx,
-		formatRx:   formatRx,
-		ip:         ip,
-		w:          w,
-		mutex:      mutex,
-		master:     master,
-		cache:      cache,
-		cancel:     make(chan struct{}),
-		ready:      make(chan struct{}),
+		level:     level,
+		stationRx: stationRx,
+		streamRx:  streamRx,
+		formatRx:  formatRx,
+		ip:        ip,
+		w:         w,
+		mutex:     mutex,
+		master:    master,
+		cache:     cache,
+		cancel:    make(chan struct{}),
+		ready:     make(chan struct{}),
 	}
 
 	return self
@@ -437,13 +437,13 @@ func (self *JSONInfoGenerator) stations(addStreams bool) error {
 	self.info.Station = &[]*StationInfo{}
 
 	for _, k := range self.master.StationList(self.ip) {
-		if !self.stationRx.MatchString(k.NetworkCode+"_"+k.StationCode) {
+		if !self.stationRx.MatchString(k.NetworkCode + "_" + k.StationCode) {
 			continue
 		}
 
 		s := self.master.StationConfig(k)
 		station := &StationInfo{
-			Id:          k.NetworkCode+"_"+k.StationCode,
+			Id:          k.NetworkCode + "_" + k.StationCode,
 			Description: s.Description,
 			Startseq:    0,
 			Endseq:      0,
@@ -490,7 +490,7 @@ func (self *JSONInfoGenerator) stations(addStreams bool) error {
 
 					*station.Stream = append(*station.Stream, &StreamInfo{
 						Id:        streamId,
-						Format:     "3",
+						Format:    "3",
 						Subformat: "D",
 						Starttime: stime,
 						Endtime:   etime,
@@ -560,7 +560,7 @@ func (self *JSONInfoGenerator) collect() error {
 		fallthrough
 
 	default:
-		self.info.Error = &ErrorInfo{"ARGUMENTS", "requested item is not available"};
+		self.info.Error = &ErrorInfo{"ARGUMENTS", "requested item is not available"}
 	}
 
 	return nil

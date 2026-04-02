@@ -41,4 +41,3 @@ func ms2to3(in []byte, out []byte) int {
 	outlen := C.int(len(out))
 	return int(C.ms2to3(inptr, inlen, outptr, outlen))
 }
-

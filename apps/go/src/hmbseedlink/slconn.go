@@ -29,7 +29,7 @@ import (
 )
 
 const (
-	NSELECTORS = 100
+	NSELECTORS  = 100
 	TIME_FORMAT = "2006-01-02T15:04:05Z"
 )
 
@@ -314,7 +314,7 @@ func (self *SeedlinkConnection) _SELECT4(neg, stream, format string) {
 
 	if len(s) == 4 && len(s[0]) <= 2 && len(s[1]) == 1 && len(s[2]) == 1 && len(s[3]) == 1 &&
 		rx.MatchString("3D") {
-		stream = s[0]+"_"+s[1]+s[2]+s[3]+"_D"
+		stream = s[0] + "_" + s[1] + s[2] + s[3] + "_D"
 
 	} else {
 		stream = "notexist"
