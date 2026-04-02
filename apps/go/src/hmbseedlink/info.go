@@ -100,12 +100,6 @@ func (self *InfoCache) Request(cancel <-chan struct{}) (map[string]*hmb.QueueInf
 	}
 }
 
-type InfoGenerator interface {
-	Do() error
-	CancelRequest()
-	ReadyWait()
-}
-
 type MSEEDInfoGenerator struct {
 	level    int
 	seedname string
@@ -130,6 +124,7 @@ func NewMSEEDInfoGenerator(level int, ip net.IP, w *bufio.Writer, mutex *sync.Mu
 		master:   master,
 		cache:    cache,
 		cancel:   make(chan struct{}),
+		ready:    make(chan struct{}),
 		i:        MS2_DATASTART,
 	}
 

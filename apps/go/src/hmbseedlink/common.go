@@ -42,6 +42,12 @@ type StationConfig struct {
 	ACL         IPNetACL
 }
 
+type InfoGenerator interface {
+	Do() error
+	CancelRequest()
+	ReadyWait()
+}
+
 type MasterInterface interface {
 	SoftwareId() string
 	Organization() string
