@@ -305,7 +305,7 @@ func (self *SeedlinkConnection) _SELECT(neg, loc, cha, ext string) {
 }
 
 func (self *SeedlinkConnection) _SELECT4(neg, stream, format string) {
-	if len(self.queueSet) == 0 {
+	if self.queueSet == nil {
 		self._ERROR4("UNEXPECTED", "no station selected")
 		return
 	}
@@ -452,7 +452,7 @@ func (self *SeedlinkConnection) _TIME(year1, month1, day1, hour1, min1, sec1, ye
 }
 
 func (self *SeedlinkConnection) _DATA4(seq, starttime, endtime string) {
-	if len(self.queueSet) == 0 {
+	if self.queueSet == nil {
 		self._ERROR4("UNEXPECTED", "no station selected")
 		return
 	}
@@ -477,7 +477,9 @@ func (self *SeedlinkConnection) _DATA4(seq, starttime, endtime string) {
 			_seq = hmb.Sequence{seq, true}
 		}
 
-	} else if starttime != "" {
+	}
+
+	if starttime != "" {
 		if starttime, err := time.Parse(TIME_FORMAT, starttime); err != nil {
 			self.Println(err)
 			self._ERROR4("ARGUMENTS", "invalid start time")
@@ -487,7 +489,9 @@ func (self *SeedlinkConnection) _DATA4(seq, starttime, endtime string) {
 			_starttime = hmb.Time{starttime}
 		}
 
-	} else if endtime != "" {
+	}
+
+	if endtime != "" {
 		if endtime, err := time.Parse(TIME_FORMAT, endtime); err != nil {
 			self.Println(err)
 			self._ERROR4("ARGUMENTS", "invalid end time")
@@ -845,7 +849,7 @@ loop:
 		}
 
 		if self.slproto == 4 {
-			self._ERROR4("UNSUPPORTED", "invalid command")
+			self._ERROR4("UNSUPPORTED", "invalid command or syntax")
 
 		} else {
 			self._ERROR()
