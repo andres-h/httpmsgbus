@@ -22,7 +22,7 @@ import (
 	"runtime"
 )
 
-const VERSION = "0.2 (2026.092)"
+const VERSION = "0.2 (2026.092a)"
 
 const (
 	SYSLOG_FACILITY = syslog.LOG_LOCAL0

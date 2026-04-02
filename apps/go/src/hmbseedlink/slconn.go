@@ -55,9 +55,9 @@ var sl4commands = []*regexp.Regexp{
 	regexp.MustCompile("(?i)^(END)\\s*$"),
 	regexp.MustCompile("(?i)^(ENDFETCH)\\s*$"),
 	regexp.MustCompile("(?i)^(HELLO)\\s*$"),
-	regexp.MustCompile("(?i)^(INFO)\\s+([A-Z]+)(?:\\s+([A-Z_*?]+)(?:\\s+([A-Z_*?]+)(?:\\.([A-Z0-9*?]{1,2}))?)?)?\\s*$"),
-	regexp.MustCompile("(?i)^(SELECT)\\s+(!)?([A-Z_*?]+)(?:\\.([A-Z0-9*?]{1,2}))?\\s*$"),
-	regexp.MustCompile("(?i)^(STATION)\\s+([A-Z_*?]+)\\s*$"),
+	regexp.MustCompile("(?i)^(INFO)\\s+([A-Z]+)(?:\\s+([A-Z0-9_*?]+)(?:\\s+([A-Z0-9_*?]+)(?:\\.([A-Z0-9*?]{1,2}))?)?)?\\s*$"),
+	regexp.MustCompile("(?i)^(SELECT)\\s+(!)?([A-Z0-9_*?]+)(?:\\.([A-Z0-9*?]{1,2}))?\\s*$"),
+	regexp.MustCompile("(?i)^(STATION)\\s+([A-Z0-9_*?]+)\\s*$"),
 	regexp.MustCompile("(?i)^(USERAGENT)\\s+(\\S+)\\s*$"),
 }
 
@@ -151,9 +151,10 @@ func (self *SeedlinkConnection) _ERROR() {
 }
 
 func (self *SeedlinkConnection) _ERROR4(code, message string) {
-	self.Println(message)
+	errmsg := "ERROR " + code + " " + message
+	self.Println(errmsg)
 	self.mutex.Lock()
-	self.w.Write([]byte("ERROR " + code + " " + message + "\r\n"))
+	self.w.Write([]byte(errmsg + "\r\n"))
 	self.w.Flush()
 	self.mutex.Unlock()
 }
@@ -513,12 +514,10 @@ func (self *SeedlinkConnection) _END() {
 }
 
 func (self *SeedlinkConnection) _END4(fetch bool) {
-	var keep bool = true
+	var keep bool = !fetch
 
 	for _, q := range self.param.Queue {
-		if !fetch {
-			q.Keep = &keep
-		}
+		q.Keep = &keep
 	}
 
 	self.hmb = hmb.NewClient(self.source, self.ip, self.param, self.timeout, self.retryWait, self)
@@ -845,7 +844,12 @@ loop:
 			self.hmb = nil
 		}
 
-		self._ERROR()
+		if self.slproto == 4 {
+			self._ERROR4("UNSUPPORTED", "invalid command")
+
+		} else {
+			self._ERROR()
+		}
 	}
 
 	if err := scanner.Err(); err != nil {
