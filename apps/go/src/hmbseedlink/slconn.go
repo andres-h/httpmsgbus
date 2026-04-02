@@ -122,13 +122,13 @@ func NewSeedlinkConnection(master MasterInterface, conn net.Conn, ip net.IP, sou
 	return self
 }
 
-func (self *SeedlinkConnection) Println(v ...interface{}) {
-	args := make([]interface{}, 1, len(v)+1)
+func (self *SeedlinkConnection) Println(v ...any) {
+	args := make([]any, 1, len(v)+1)
 	args[0] = "[" + self.conn.RemoteAddr().String() + "]"
 	log.Println(append(args, v...)...)
 }
 
-func (self *SeedlinkConnection) Printf(format string, v ...interface{}) {
+func (self *SeedlinkConnection) Printf(format string, v ...any) {
 	self.Println(fmt.Sprintf(format, v...))
 }
 
@@ -171,7 +171,7 @@ func (self *SeedlinkConnection) _CAT() {
 
 	for _, k := range self.master.StationList(self.ip) {
 		s := self.master.StationConfig(k)
-		self.w.Write([]byte(fmt.Sprintf("%2s %-5s %s\r\n", k.NetworkCode, k.StationCode, s.Description)))
+		self.w.Write(fmt.Appendf(nil, "%2s %-5s %s\r\n", k.NetworkCode, k.StationCode, s.Description))
 	}
 
 	self.w.Write([]byte("END"))
@@ -646,7 +646,7 @@ func (self *SeedlinkConnection) dataServe(h *hmb.Client) {
 					}
 
 				} else {
-					header := []byte(fmt.Sprintf("SL%06X", m.Seq.Value&0xffffff))
+					header := fmt.Appendf(nil, "SL%06X", m.Seq.Value&0xffffff)
 
 					self.mutex.Lock()
 

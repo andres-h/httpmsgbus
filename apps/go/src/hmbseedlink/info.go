@@ -134,7 +134,7 @@ func NewMSEEDInfoGenerator(level int, ip net.IP, w *bufio.Writer, mutex *sync.Mu
 		seedname = "ERR"
 	}
 
-	for i := 0; i < 20; i++ {
+	for i := range 20 {
 		self.rec[i] = ' '
 	}
 
@@ -153,7 +153,7 @@ func NewMSEEDInfoGenerator(level int, ip net.IP, w *bufio.Writer, mutex *sync.Mu
 
 func (self *MSEEDInfoGenerator) flush(final bool) error {
 	t := time.Now().UTC()
-	copy(self.rec[0:6], []byte(fmt.Sprintf("%06d", self.recno)))
+	copy(self.rec[0:6], fmt.Appendf(nil, "%06d", self.recno))
 	binary.BigEndian.PutUint16(self.rec[20:22], uint16(t.Year()))
 	binary.BigEndian.PutUint16(self.rec[22:24], uint16(t.YearDay()))
 	self.rec[24] = byte(t.Hour())
@@ -211,11 +211,7 @@ func (self *MSEEDInfoGenerator) write(b []byte) (int, error) {
 			}
 		}
 
-		size := len(b) - n
-
-		if size > MS2_RECLEN-self.i {
-			size = MS2_RECLEN - self.i
-		}
+		size := min(len(b)-n, MS2_RECLEN-self.i)
 
 		copy(self.rec[self.i:self.i+size], b[n:n+size])
 
@@ -255,8 +251,8 @@ func (self *MSEEDInfoGenerator) streams(q *hmb.QueueInfo) error {
 			etime = q.Endtime.Format(TIMEFMT)
 		}
 
-		if _, err := self.write([]byte(fmt.Sprintf("<stream location=\"%s\" seedname=\"%s\" type=\"%s\" begin_time=\"%s\" end_time=\"%s\" begin_recno=\"0\" end_recno=\"0\" gap_check=\"disabled\" gap_treshold=\"0\"/>",
-			loc, cha, ext, stime, etime))); err != nil {
+		if _, err := self.write(fmt.Appendf(nil, "<stream location=\"%s\" seedname=\"%s\" type=\"%s\" begin_time=\"%s\" end_time=\"%s\" begin_recno=\"0\" end_recno=\"0\" gap_check=\"disabled\" gap_treshold=\"0\"/>",
+			loc, cha, ext, stime, etime)); err != nil {
 			return err
 		}
 	}
@@ -275,13 +271,13 @@ func (self *MSEEDInfoGenerator) stations() error {
 		s := self.master.StationConfig(k)
 
 		if q, ok := queues["WAVE_"+k.NetworkCode+"_"+k.StationCode]; !ok {
-			if _, err := self.write([]byte(fmt.Sprintf("<station name=\"%s\" network=\"%s\" description=\"%s\" begin_seq=\"0\" end_seq=\"0\" stream_check=\"enabled\"/>",
-				k.StationCode, k.NetworkCode, s.Description))); err != nil {
+			if _, err := self.write(fmt.Appendf(nil, "<station name=\"%s\" network=\"%s\" description=\"%s\" begin_seq=\"0\" end_seq=\"0\" stream_check=\"enabled\"/>",
+				k.StationCode, k.NetworkCode, s.Description)); err != nil {
 				return err
 			}
 
-		} else if _, err := self.write([]byte(fmt.Sprintf("<station name=\"%s\" network=\"%s\" description=\"%s\" begin_seq=\"%d\" end_seq=\"%d\" stream_check=\"enabled\"",
-			k.StationCode, k.NetworkCode, s.Description, q.Startseq.Value&0xffffff, q.Endseq.Value&0xffffff))); err != nil {
+		} else if _, err := self.write(fmt.Appendf(nil, "<station name=\"%s\" network=\"%s\" description=\"%s\" begin_seq=\"%d\" end_seq=\"%d\" stream_check=\"enabled\"",
+			k.StationCode, k.NetworkCode, s.Description, q.Startseq.Value&0xffffff, q.Endseq.Value&0xffffff)); err != nil {
 			return err
 
 		} else if self.level == INFO_STATIONS {
@@ -311,10 +307,10 @@ func (self *MSEEDInfoGenerator) generate() error {
 	if _, err := self.write([]byte("<?xml version=\"1.0\"?>")); err != nil {
 		return err
 
-	} else if _, err := self.write([]byte(fmt.Sprintf("<seedlink software=\"%s\" organization=\"%s\" started=\"%s\">",
+	} else if _, err := self.write(fmt.Appendf(nil, "<seedlink software=\"%s\" organization=\"%s\" started=\"%s\">",
 		self.master.SoftwareId(),
 		self.master.Organization(),
-		self.master.Started().Format(TIMEFMT)))); err != nil {
+		self.master.Started().Format(TIMEFMT))); err != nil {
 		return err
 
 	} else if self.level == INFO_CAPABILITIES {

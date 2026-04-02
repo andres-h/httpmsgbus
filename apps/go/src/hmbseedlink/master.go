@@ -93,13 +93,13 @@ func NewMaster(softwareId string, organization string, source string, timeout in
 	return self
 }
 
-func (self *Master) Println(v ...interface{}) {
-	args := make([]interface{}, 1, len(v)+1)
+func (self *Master) Println(v ...any) {
+	args := make([]any, 1, len(v)+1)
 	args[0] = "[master]"
 	log.Println(append(args, v...)...)
 }
 
-func (self *Master) Printf(format string, v ...interface{}) {
+func (self *Master) Printf(format string, v ...any) {
 	self.Println(fmt.Sprintf(format, v...))
 }
 
@@ -139,7 +139,7 @@ func (self *Master) start() {
 		} else if m == nil || m.Type != "STATION_CONFIG" {
 			continue
 
-		} else if data, ok := m.Data.Data.(map[string]interface{}); !ok {
+		} else if data, ok := m.Data.Data.(map[string]any); !ok {
 			self.Println("invalid STATION_CONFIG message")
 
 		} else if networkCode, ok := data["networkCode"].(string); !ok {
@@ -151,7 +151,7 @@ func (self *Master) start() {
 		} else if desc, ok := data["description"].(string); !ok {
 			self.Println("invalid STATION_CONFIG message (description)")
 
-		} else if access, ok := data["access"].([]interface{}); !ok {
+		} else if access, ok := data["access"].([]any); !ok {
 			self.Println("invalid STATION_CONFIG message (access)")
 
 		} else {
