@@ -58,7 +58,7 @@ var sl4commands = []*regexp.Regexp{
 	regexp.MustCompile("(?i)^(INFO)\\s+([A-Z]+)(?:\\s+([A-Z0-9_*?]+)(?:\\s+([A-Z0-9_*?]+)(?:\\.([A-Z0-9*?]{1,2}))?)?)?\\s*$"),
 	regexp.MustCompile("(?i)^(SELECT)\\s+(!)?([A-Z0-9_*?]+)(?:\\.([A-Z0-9*?]{1,2}))?\\s*$"),
 	regexp.MustCompile("(?i)^(STATION)\\s+([A-Z0-9_*?]+)\\s*$"),
-	regexp.MustCompile("(?i)^(USERAGENT)\\s+(\\S+)\\s*$"),
+	regexp.MustCompile("(?i)^(USERAGENT)\\s+(.*)\\s*$"),
 }
 
 func pat2rx(pat string) *regexp.Regexp {
@@ -202,7 +202,7 @@ func (self *SeedlinkConnection) _SLPROTO(proto string) {
 	self._OK()
 }
 
-func (self *SeedlinkConnection) _USERAGENT(proto string) {
+func (self *SeedlinkConnection) _USERAGENT(string) {
 	self._OK()
 }
 
