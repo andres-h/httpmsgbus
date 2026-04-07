@@ -39,7 +39,7 @@ import (
 	"time"
 )
 
-const VERSION = "0.20 (2025.120)"
+const VERSION = "0.20 (2026.098)"
 
 const (
 	// The following parameters should be tuned for optimum performance.
