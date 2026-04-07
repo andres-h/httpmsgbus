@@ -314,9 +314,7 @@ func (self *SeedlinkConnection) _SELECT4(neg, stream, format string) {
 
 	var _topic string
 
-	fmt := regexp.MustCompile("^" + strings.ReplaceAll(strings.ReplaceAll(format, "?", "."), "*", ".*"))
-
-	if fmt.MatchString("3D") { // in SL4 mode we provide 3D only
+	if pat2rx(format + "*").MatchString("3D") { // in SL4 mode we provide 3D only
 		_topic = stream + "_?D"
 
 	} else {
@@ -587,7 +585,7 @@ func (self *SeedlinkConnection) _INFO4(item, station, stream, format string) {
 		level = INFO_ERROR
 	}
 
-	self.infoGen = self.master.JSONInfoRequest(level, pat2rx(station), pat2rx(stream), pat2rx(format), self.ip, self.w, &self.mutex)
+	self.infoGen = self.master.JSONInfoRequest(level, pat2rx(station), pat2rx(stream), pat2rx(format+"*"), self.ip, self.w, &self.mutex)
 	go self.infoServe(self.infoGen)
 }
 
