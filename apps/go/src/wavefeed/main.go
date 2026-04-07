@@ -23,6 +23,7 @@ import (
 	"log/syslog"
 	"math"
 	"os"
+	"os/exec"
 	"regexp"
 	"strings"
 	"syscall"
@@ -400,30 +401,37 @@ func main() {
 	if r, w, err := os.Pipe(); err != nil {
 		log.Fatal(err)
 
-	} else if err := syscall.Dup2(int(w.Fd()), PLUGINFD); err != nil {
-		log.Fatal(err)
-
-	} else if _, err := os.StartProcess("/bin/sh", []string{"sh", "-c", *cmd},
-		&os.ProcAttr{Files: []*os.File{os.Stdin, os.Stdout, os.Stderr}}); err != nil {
-		log.Fatal(err)
-
 	} else {
-		w.Close()
-
-		h := hmb.NewClient(*sink, nil, &hmb.OpenParam{}, *timeout, 10, log)
-
-		worker := &Worker{
-			r:       r,
-			hmb:     h,
-			utrx:    utrx,
-			bufsize: *bufsize,
-			seqt:    make(map[string]*SeqTime),
-			buf:     make([]byte, 1024),
-			msgs:    make([]*hmb.Message, 0, *bufsize),
-			ping:    make(chan bool, 1),
-			pong:    make(chan bool, 1),
+		plugin := exec.Command("sh", "-c", *cmd)
+		plugin.Stdout = os.Stdout
+		plugin.Stderr = os.Stderr
+		plugin.ExtraFiles = []*os.File{PLUGINFD - 3: w}
+		plugin.SysProcAttr = &syscall.SysProcAttr{
+			Setpgid:   true,
+			Pdeathsig: syscall.SIGTERM,
 		}
 
-		worker.Start()
+		if err := plugin.Start(); err != nil {
+			log.Fatal(err)
+
+		} else {
+			w.Close()
+
+			h := hmb.NewClient(*sink, nil, &hmb.OpenParam{}, *timeout, 10, log)
+
+			worker := &Worker{
+				r:       r,
+				hmb:     h,
+				utrx:    utrx,
+				bufsize: *bufsize,
+				seqt:    make(map[string]*SeqTime),
+				buf:     make([]byte, 1024),
+				msgs:    make([]*hmb.Message, 0, *bufsize),
+				ping:    make(chan bool, 1),
+				pong:    make(chan bool, 1),
+			}
+
+			worker.Start()
+		}
 	}
 }
