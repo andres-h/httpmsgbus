@@ -55,7 +55,7 @@ def loadStationDescriptions(inv):
             for si in range(n.stationCount()):
                 s = n.station(si)
                 sta = s.code()
-                d[net][sta] = s.description()
+                d[net][sta] = s.description().replace('&', '&amp;')
 
                 try:
                     end = s.end()
@@ -140,14 +140,14 @@ class Module(seiscomp.kernel.Module):
         cfg = self._readConfig()
         prog = "run_with_lock"
         params = self.env.lockFile(self.name) + ' ' + self.env.binaryFile(self.name)
-        pbin = os.path.join(self.env.SEISCOMP_ROOT, "share", "plugins", "seedlink", "chain_plugin")
-        pconf = os.path.join(self.env.SEISCOMP_ROOT, "var", "lib", "seedlink", "chain0.xml")
+        pbin = os.path.join(self.env.SEISCOMP_ROOT, "share", "plugins", "seedlink", "chain4_plugin")
+        pconf = os.path.join(self.env.SEISCOMP_ROOT, "var", "lib", "seedlink", "4chain0.xml")
         psys = ' -D' if self.env.syslog else ''
         params += ' -C "%s%s -f %s chain0"' % (pbin, psys, pconf)
         try: params += ' -H %s' % cfg.getString('hmbAddress')
         except: params += ' -H http://localhost:8000/wave'
         try: params += ' -X "%s"' % cfg.getString('unreliableChannelsRegex')
-        except: params += ' -X "_AE|_[^D]$"'
+        except: params += ' -X "_A_E_._|_[^D]$"'
         try: params += ' -b %d' % cfg.getInt('bufferSize')
         except: pass
         try: params += ' -t %d' % cfg.getInt('timeout')
@@ -212,6 +212,8 @@ class Module(seiscomp.kernel.Module):
         if mod is None:
             return 0
 
+        cfg = self._readConfig()
+
         try: hmbAddr = cfg.getString('hmbAddress')
         except: hmbAddr = 'http://localhost:8000/wave'
 
@@ -219,8 +221,6 @@ class Module(seiscomp.kernel.Module):
         stations, hmb = loadStationsHMB(hmbAddr)
 
         # Load station descriptions from inventory
-        cfg = self._readConfig()
-
         try: dbUrl = cfg.getString('inventory_connection')
         except: dbUrl = None
 
@@ -259,6 +259,7 @@ class Module(seiscomp.kernel.Module):
                 log("adding", description)
 
             elif s != (description, tuple(access)):
+            #elif s != (s[0], tuple(access)):
                 log("updating", description)
 
             else:
@@ -298,7 +299,7 @@ class Module(seiscomp.kernel.Module):
             configUpdate.append(msg)
 
         if configUpdate:
-            log("sending update to hmb://localhost:%d/wave" % self.hmbPort)
+            log("sending update to %s" % hmbAddr)
             hmb.send(configUpdate)
 
         else:

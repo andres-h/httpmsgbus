@@ -226,13 +226,13 @@ func (self *MSEEDInfoGenerator) streams(q *hmb.QueueInfo) error {
 	for k, t := range q.Topic {
 		var loc, cha, ext string
 
-		if s := strings.Split(k, "_"); len(s) != 3 {
+		if s := strings.Split(k, "_"); len(s) != 5 || s[4][0] != '2' {
 			continue
 
 		} else {
 			loc = s[0]
-			cha = s[1]
-			ext = s[2]
+			cha = s[1] + s[2] + s[3]
+			ext = s[4][1:2]
 		}
 
 		var stime, etime string
@@ -270,7 +270,7 @@ func (self *MSEEDInfoGenerator) stations() error {
 	for _, k := range self.master.StationList(self.ip) {
 		s := self.master.StationConfig(k)
 
-		if q, ok := queues["WAVE_"+k.NetworkCode+"_"+k.StationCode]; !ok {
+		if q, ok := queues["FDSN_"+k.NetworkCode+"_"+k.StationCode]; !ok {
 			if _, err := self.write(fmt.Appendf(nil, "<station name=\"%s\" network=\"%s\" description=\"%s\" begin_seq=\"0\" end_seq=\"0\" stream_check=\"enabled\"/>",
 				k.StationCode, k.NetworkCode, s.Description)); err != nil {
 				return err
@@ -446,7 +446,7 @@ func (self *JSONInfoGenerator) stations(addStreams bool) error {
 			Backfill:    -1,
 		}
 
-		if q, ok := queues["WAVE_"+k.NetworkCode+"_"+k.StationCode]; ok {
+		if q, ok := queues["FDSN_"+k.NetworkCode+"_"+k.StationCode]; ok {
 			station.Startseq = q.Startseq.Value
 			station.Endseq = q.Endseq.Value
 
@@ -454,11 +454,11 @@ func (self *JSONInfoGenerator) stations(addStreams bool) error {
 				station.Stream = &[]*StreamInfo{}
 
 				for k, t := range q.Topic {
-					if len(k) < 5 || k[len(k)-2:] != "_D" {
+					if len(k) < 3 || k[len(k)-1:] != "D" {
 						continue
 					}
 
-					streamId := k[:len(k)-2]
+					streamId := k[:len(k)-3]
 
 					if !self.streamRx.MatchString(streamId) {
 						continue

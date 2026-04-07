@@ -21,6 +21,7 @@ import (
 	"io"
 	_log "log"
 	"log/syslog"
+	"math"
 	"os"
 	"regexp"
 	"strings"
@@ -28,12 +29,12 @@ import (
 	"time"
 )
 
-const VERSION = "0.1 (2025.120)"
+const VERSION = "0.2 (2026.097)"
 
 const (
 	PLUGINFD        = 63
 	HDRSIZE         = 60
-	DATASIZE_MAX    = 4000
+	DATASIZE_MAX    = 16384
 	SYSLOG_FACILITY = syslog.LOG_LOCAL0
 	SYSLOG_SEVERITY = syslog.LOG_NOTICE
 )
@@ -41,11 +42,6 @@ const (
 var regexTopicName = regexp.MustCompile("^[\\w]*$")
 
 var log = _log.New(os.Stdout, "", _log.LstdFlags)
-
-type StationKey struct {
-	NetworkCode string
-	StationCode string
-}
 
 type SeqTime struct {
 	seq int64
@@ -57,7 +53,7 @@ type Worker struct {
 	hmb     *hmb.Client
 	utrx    *regexp.Regexp
 	bufsize int
-	seqt    map[StationKey]*SeqTime
+	seqt    map[string]*SeqTime
 	buf     []byte
 	ri      int
 	wi      int
@@ -77,19 +73,20 @@ func (self *Worker) readPacket() error {
 	}
 
 	hdr := self.buf[self.ri : self.ri+HDRSIZE]
-	packetType := int(binary.LittleEndian.Uint32(hdr[0:4]))
-	sta := string(bytes.TrimRight(hdr[4:14], "\x00"))
-	cha := string(bytes.TrimRight(hdr[14:24], "\x00"))
-	year := int(binary.LittleEndian.Uint32(hdr[24:28]))
-	yday := int(binary.LittleEndian.Uint32(hdr[28:32]))
-	hour := int(binary.LittleEndian.Uint32(hdr[32:36]))
-	minute := int(binary.LittleEndian.Uint32(hdr[36:40]))
-	second := int(binary.LittleEndian.Uint32(hdr[40:44]))
+	packetType := int(binary.NativeEndian.Uint32(hdr[0:4]))
+	station := string(bytes.TrimRight(hdr[4:14], "\x00"))
+	format := string(hdr[14])
+	subformat := string(hdr[15])
+	year := int(binary.NativeEndian.Uint32(hdr[24:28]))
+	yday := int(binary.NativeEndian.Uint32(hdr[28:32]))
+	hour := int(binary.NativeEndian.Uint32(hdr[32:36]))
+	minute := int(binary.NativeEndian.Uint32(hdr[36:40]))
+	second := int(binary.NativeEndian.Uint32(hdr[40:44]))
 	usec := int(binary.LittleEndian.Uint32(hdr[44:48]))
-	tqSeq := int64(int32(binary.LittleEndian.Uint32(hdr[52:56])))
-	dataSize := int(binary.LittleEndian.Uint32(hdr[56:60]))
+	rawseq := int64(binary.NativeEndian.Uint64(hdr[48:56]))
+	dataSize := int(binary.NativeEndian.Uint32(hdr[56:60]))
 
-	if packetType < 8 || packetType > 13 {
+	if packetType < 8 || packetType > 14 {
 		log.Fatal("invalid packet type", packetType)
 	}
 
@@ -122,97 +119,142 @@ func (self *Worker) readPacket() error {
 	}
 
 	data := make([]byte, dataSize)
-	copy(data, self.buf[self.ri : self.ri+dataSize])
+	copy(data, self.buf[self.ri:self.ri+dataSize])
 	self.ri += dataSize
 
 	if packetType == 12 {
-		if !strings.Contains(sta, "_") {
-			log.Printf("station ID %s is not in network_station format", sta)
+		if !strings.Contains(station, "_") {
+			log.Printf("station ID %s is not in network_station format", station)
 		}
 
 		timestamp := time.Date(year, time.Month(1), 1, hour, minute, second, usec*1000, time.UTC).Add(time.Duration((yday-1)*24) * time.Hour)
 
 		if t := timestamp.Unix(); t < 0 || t > 253402297199 {
-			log.Println("LOG_"+sta, "invalid time:", timestamp)
+			log.Println("LOG_"+station, "invalid time:", timestamp)
 			return nil
 		}
 
 		self.msgs = append(self.msgs, &hmb.Message{
 			Type:      "TEXT",
-			Queue:     "LOG_" + sta,
+			Queue:     "LOG_" + station,
 			Starttime: hmb.Time{timestamp},
 			Endtime:   hmb.Time{timestamp},
 			Data:      hmb.Payload{bytes.TrimSpace(data)},
 		})
 
-	} else if packetType == 13 {
-		sta := string(bytes.TrimSpace(data[8:13]))
-		loc := string(bytes.TrimSpace(data[13:15]))
-		mcha := string(bytes.TrimSpace(data[15:18]))
-		net := string(bytes.TrimSpace(data[18:20]))
-		year := int(binary.BigEndian.Uint16(data[20:22]))
-		yday := int(binary.BigEndian.Uint16(data[22:24]))
-		hour := int(data[24])
-		minute := int(data[25])
-		second := int(data[26])
-		tms := int(binary.BigEndian.Uint16(data[28:30]))
-		nsamp := int(binary.BigEndian.Uint16(data[30:32]))
-		srfact := float64(int16(binary.BigEndian.Uint16(data[32:34])))
-		srmult := float64(int16(binary.BigEndian.Uint16(data[34:36])))
+	} else if packetType == 14 {
+		var topic string
+		var stime time.Time
+		var samprate float64
+		var nsamp uint32
 
-		if srfact < 0 {
-			srfact = -1.0 / srfact
+		if format == "2" {
+			sta := string(bytes.TrimSpace(data[8:13]))
+			loc := string(bytes.TrimSpace(data[13:15]))
+			cha := string(data[15:18])
+			net := string(bytes.TrimSpace(data[18:20]))
+			year := int(binary.BigEndian.Uint16(data[20:22]))
+			yday := int(binary.BigEndian.Uint16(data[22:24]))
+			hour := int(data[24])
+			minute := int(data[25])
+			second := int(data[26])
+			tms := int(binary.BigEndian.Uint16(data[28:30]))
+			nsamp = uint32(binary.BigEndian.Uint16(data[30:32]))
+			srfact := float64(int16(binary.BigEndian.Uint16(data[32:34])))
+			srmult := float64(int16(binary.BigEndian.Uint16(data[34:36])))
+
+			station = net + "_" + sta
+			topic = loc + "_" + cha[0:1] + "_" + cha[1:2] + "_" + cha[2:3] + "_2" + subformat
+			stime = time.Date(year, time.Month(1), 1, hour, minute, second, tms*100000, time.UTC).Add(time.Duration((yday-1)*24) * time.Hour)
+
+			if srfact < 0 {
+				srfact = -1.0 / srfact
+			}
+
+			if srmult < 0 {
+				srmult = -1.0 / srmult
+			}
+
+			samprate = srfact * srmult
+
+		} else if format == "3" {
+			if !bytes.Equal(data[:3], []byte{77, 83, 3}) {
+				log.Fatal("invalid MS3 signature:", data[:3])
+			}
+
+			ns := int(binary.LittleEndian.Uint32(data[4:8]))
+			year := int(binary.LittleEndian.Uint16(data[8:10]))
+			yday := int(binary.LittleEndian.Uint16(data[10:12]))
+			hour := int(data[12])
+			minute := int(data[13])
+			second := int(data[14])
+			samprate = math.Float64frombits(binary.LittleEndian.Uint64(data[16:24]))
+			nsamp = uint32(binary.LittleEndian.Uint32(data[24:28]))
+			idlen := int(data[33])
+			sourceid := string(data[40 : 40+idlen])
+
+			if sourceid[:5] != "FDSN:" {
+				log.Println("non-FDSN source identifier:", sourceid)
+				return nil
+
+			} else if s := strings.Split(sourceid[5:], "_"); len(s) != 6 {
+				log.Println("invalid FDSN source identifier:", sourceid)
+				return nil
+
+			} else {
+				station = s[0] + "_" + s[1]
+				topic = s[2] + "_" + s[3] + "_" + s[4] + "_" + s[5] + "_3" + subformat
+			}
+
+			stime = time.Date(year, time.Month(1), 1, hour, minute, second, ns, time.UTC).Add(time.Duration((yday-1)*24) * time.Hour)
+
+			if samprate < 0 {
+				samprate = -1.0 / samprate
+			}
+
+		} else {
+			return nil
 		}
 
-		if srmult < 0 {
-			srmult = -1.0 / srmult
-		}
-
-		sr := srfact * srmult
-		seqt, ok := self.seqt[StationKey{net, sta}]
+		seqt, ok := self.seqt[station]
 
 		if !ok {
 			seqt = &SeqTime{}
-			self.seqt[StationKey{net, sta}] = seqt
+			self.seqt[station] = seqt
 		}
 
-		var topic string
 		var seq hmb.Sequence
 
-		if cha == "" {
-			topic = loc + "_" + mcha + "_D"
-
-		} else {
-			topic = cha
-
-			if tqSeq != -1 {
-				seq.Value = (seqt.seq &^ 0xffffff) | (tqSeq & 0xffffff)
-				seq.Set = true
+		if rawseq != -1 {
+			if rawseq < seqt.seq {
+				seq.Value = (seqt.seq &^ 0xffffff) | (rawseq & 0xffffff)
 
 				if seq.Value < seqt.seq {
 					seq.Value += 0x1000000
 				}
 
-				seqt.seq = seq.Value
+			} else {
+				seq.Value = rawseq
 			}
+
+			seq.Set = true
+			seqt.seq = seq.Value
 		}
 
-		var stime, etime time.Time
+		var etime time.Time
 
 		if self.utrx != nil && self.utrx.MatchString(topic) && !seqt.t.IsZero() {
 			etime = seqt.t
 
-			if sr != 0 {
-				stime = etime.Add(-time.Duration(float64(time.Second) * float64(nsamp) / sr))
+			if samprate != 0 {
+				stime = etime.Add(-time.Duration(float64(time.Second) * float64(nsamp) / samprate))
 			} else {
 				stime = etime
 			}
 
 		} else {
-			stime = time.Date(year, time.Month(1), 1, hour, minute, second, tms*100000, time.UTC).Add(time.Duration((yday-1)*24) * time.Hour)
-
-			if sr != 0 {
-				etime = stime.Add(time.Duration(float64(time.Second) * float64(nsamp) / sr))
+			if samprate != 0 {
+				etime = stime.Add(time.Duration(float64(time.Second) * float64(nsamp) / samprate))
 			} else {
 				etime = stime
 			}
@@ -221,23 +263,23 @@ func (self *Worker) readPacket() error {
 		}
 
 		if t := stime.Unix(); t < 0 || t > 253402297199 {
-			log.Println("WAVE_"+net+"_"+sta, topic, seq, "invalid starttime:", stime)
+			log.Println("FDSN_"+station, topic, seq, "invalid starttime:", stime)
 			return nil
 		}
 
 		if t := etime.Unix(); t < 0 || t > 253402297199 {
-			log.Println("WAVE_"+net+"_"+sta, topic, seq, "invalid endtime:", etime)
+			log.Println("FDSN_"+station, topic, seq, "invalid endtime:", etime)
 			return nil
 		}
 
 		if !regexTopicName.MatchString(topic) {
-			log.Println("WAVE_"+net+"_"+sta, seq, "invalid topic:", topic)
+			log.Println("FDSN_"+station, seq, "invalid topic:", topic)
 			return nil
 		}
 
 		self.msgs = append(self.msgs, &hmb.Message{
 			Type:      "MSEED",
-			Queue:     "WAVE_" + net + "_" + sta,
+			Queue:     "FDSN_" + station,
 			Topic:     topic,
 			Seq:       seq,
 			Starttime: hmb.Time{stime},
@@ -296,8 +338,8 @@ func (self *Worker) Start() {
 
 	} else {
 		for k, q := range queues {
-			if s := strings.Split(k, "_"); len(s) == 3 && s[0] == "WAVE" {
-				self.seqt[StationKey{s[1], s[2]}] = &SeqTime{q.Endseq.Value, q.Endtime.Time}
+			if k[:5] == "FDSN_" {
+				self.seqt[k[5:]] = &SeqTime{q.Endseq.Value, q.Endtime.Time}
 			}
 		}
 	}
@@ -375,7 +417,7 @@ func main() {
 			hmb:     h,
 			utrx:    utrx,
 			bufsize: *bufsize,
-			seqt:    make(map[StationKey]*SeqTime),
+			seqt:    make(map[string]*SeqTime),
 			buf:     make([]byte, 1024),
 			msgs:    make([]*hmb.Message, 0, *bufsize),
 			ping:    make(chan bool, 1),

@@ -29,8 +29,9 @@ import (
 )
 
 const (
-	NSELECTORS  = 100
 	TIME_FORMAT = "2006-01-02T15:04:05Z"
+	NSELECTORS  = 100
+	INACTIVITY  = 60 * time.Minute
 )
 
 var sl3commands = []*regexp.Regexp{
@@ -219,11 +220,11 @@ func (self *SeedlinkConnection) _STATION(stationCode, networkCode string) {
 
 	} else {
 		var ok bool
-		self.queue, ok = self.param.Queue["WAVE_"+networkCode+"_"+stationCode]
+		self.queue, ok = self.param.Queue["FDSN_"+networkCode+"_"+stationCode]
 
 		if !ok {
 			self.queue = &hmb.OpenParamQueue{Seedlink: true, Qlen: self.qlen, Oowait: self.oowait}
-			self.param.Queue["WAVE_"+networkCode+"_"+stationCode] = self.queue
+			self.param.Queue["FDSN_"+networkCode+"_"+stationCode] = self.queue
 		}
 
 		self._OK()
@@ -242,11 +243,11 @@ func (self *SeedlinkConnection) _STATION4(station string) {
 				continue
 			}
 
-			if _, ok := self.param.Queue["WAVE_"+k.NetworkCode+"_"+k.StationCode]; ok {
+			if _, ok := self.param.Queue["FDSN_"+k.NetworkCode+"_"+k.StationCode]; ok {
 				continue
 			}
 
-			self.queueSet["WAVE_"+k.NetworkCode+"_"+k.StationCode] = &hmb.OpenParamQueue{Qlen: self.qlen, Oowait: self.oowait}
+			self.queueSet["FDSN_"+k.NetworkCode+"_"+k.StationCode] = &hmb.OpenParamQueue{Qlen: self.qlen, Oowait: self.oowait}
 		}
 
 	} else if stationId := strings.Split(station, "_"); len(stationId) == 2 {
@@ -256,11 +257,11 @@ func (self *SeedlinkConnection) _STATION4(station string) {
 		} else if len(s.ACL) != 0 && !s.ACL.Contains(self.ip) {
 			self.Println("access denied")
 
-		} else if _, ok := self.param.Queue["WAVE_"+station]; ok {
+		} else if _, ok := self.param.Queue["FDSN_"+station]; ok {
 			self.Println("station already requested")
 
 		} else {
-			self.queueSet["WAVE_"+station] = &hmb.OpenParamQueue{Qlen: self.qlen, Oowait: self.oowait}
+			self.queueSet["FDSN_"+station] = &hmb.OpenParamQueue{Qlen: self.qlen, Oowait: self.oowait}
 		}
 	}
 
@@ -292,14 +293,15 @@ func (self *SeedlinkConnection) _SELECT(neg, loc, cha, ext string) {
 		}
 
 		if cha == "" {
-			cha = "*"
+			cha = "???"
 		}
 
 		if ext == "" {
-			ext = "*"
+			ext = "?"
 		}
 
-		self.queue.Topics = append(self.queue.Topics, neg+loc+"_"+cha+"_"+ext)
+		cha = cha[0:1] + "_" + cha[1:2] + "_" + cha[2:3]
+		self.queue.Topics = append(self.queue.Topics, neg+loc+"_"+cha+"_2"+ext)
 		self._OK()
 	}
 }
@@ -310,19 +312,19 @@ func (self *SeedlinkConnection) _SELECT4(neg, stream, format string) {
 		return
 	}
 
-	s := strings.Split(stream, "_")
-	rx := regexp.MustCompile("^" + strings.ReplaceAll(strings.ReplaceAll(format, "?", "."), "*", ".*"))
+	var _topic string
 
-	if len(s) == 4 && len(s[0]) <= 2 && len(s[1]) == 1 && len(s[2]) == 1 && len(s[3]) == 1 &&
-		rx.MatchString("3D") {
-		stream = s[0] + "_" + s[1] + s[2] + s[3] + "_D"
+	fmt := regexp.MustCompile("^" + strings.ReplaceAll(strings.ReplaceAll(format, "?", "."), "*", ".*"))
+
+	if fmt.MatchString("3D") { // in SL4 mode we provide 3D only
+		_topic = stream + "_?D"
 
 	} else {
-		stream = "notexist"
+		_topic = "notexist"
 	}
 
-	if !self.topicSet[neg+stream] {
-		self.topicSet[neg+stream] = true
+	if !self.topicSet[neg+_topic] {
+		self.topicSet[neg+_topic] = true
 
 		for _, q := range self.queueSet {
 			if len(q.Topics) >= NSELECTORS {
@@ -336,7 +338,7 @@ func (self *SeedlinkConnection) _SELECT4(neg, stream, format string) {
 				q.Topics = make([]string, 0, NSELECTORS)
 			}
 
-			q.Topics = append(q.Topics, neg+stream)
+			q.Topics = append(q.Topics, neg+_topic)
 		}
 	}
 
@@ -619,21 +621,26 @@ func (self *SeedlinkConnection) dataServe(h *hmb.Client) {
 				self.conn.Close()
 			}
 
-		} else if m != nil && m.Type == "MSEED" && m.Queue[:5] == "WAVE_" {
+		} else if m != nil && m.Type == "MSEED" {
 			if data, ok := m.Data.Data.([]byte); !ok {
 				self.Println("invalid MSEED message")
 
-			} else {
-				if self.slproto == 4 {
-					idlen := len(m.Queue) - 5
+			} else if m.Queue[:5] != "FDSN_" {
+				self.Println("invalid queue:", m.Queue)
+
+			} else if self.slproto == 4 {
+				stationId := m.Queue[5:]
+				idlen := len(stationId)
+				binary.LittleEndian.PutUint64(buf[8:16], uint64(m.Seq.Value))
+				buf[16] = byte(idlen)
+				copy(buf[17:], stationId)
+
+				if strings.HasSuffix(m.Topic, "_2D") {
 					pllen := ms2to3(data, buf[17+idlen:])
 
 					if pllen >= 0 {
 						binary.LittleEndian.PutUint32(buf[4:8], uint32(pllen))
-						binary.LittleEndian.PutUint64(buf[8:16], uint64(m.Seq.Value))
-						buf[16] = byte(idlen)
-						copy(buf[17:], m.Queue[5:])
-
+						self.conn.SetReadDeadline(time.Now().Add(INACTIVITY))
 						self.mutex.Lock()
 
 						if _, err = self.w.Write(buf[:17+idlen+pllen]); err != nil {
@@ -649,11 +656,11 @@ func (self *SeedlinkConnection) dataServe(h *hmb.Client) {
 					}
 
 				} else {
-					header := fmt.Appendf(nil, "SL%06X", m.Seq.Value&0xffffff)
-
+					binary.LittleEndian.PutUint32(buf[4:8], uint32(len(data)))
+					self.conn.SetReadDeadline(time.Now().Add(INACTIVITY))
 					self.mutex.Lock()
 
-					if _, err = self.w.Write(header); err != nil {
+					if _, err = self.w.Write(buf[:17+idlen]); err != nil {
 						self.Println(err)
 						self.conn.Close()
 
@@ -669,7 +676,25 @@ func (self *SeedlinkConnection) dataServe(h *hmb.Client) {
 					self.mutex.Unlock()
 				}
 
-				self.conn.SetReadDeadline(time.Now().Add(60 * time.Minute))
+			} else {
+				header := fmt.Appendf(nil, "SL%06X", m.Seq.Value&0xffffff)
+				self.conn.SetReadDeadline(time.Now().Add(INACTIVITY))
+				self.mutex.Lock()
+
+				if _, err = self.w.Write(header); err != nil {
+					self.Println(err)
+					self.conn.Close()
+
+				} else if _, err = self.w.Write(data); err != nil {
+					self.Println(err)
+					self.conn.Close()
+
+				} else if err = self.w.Flush(); err != nil {
+					self.Println(err)
+					self.conn.Close()
+				}
+
+				self.mutex.Unlock()
 			}
 		}
 	}
@@ -702,7 +727,7 @@ func (self *SeedlinkConnection) start() {
 
 loop:
 	for {
-		self.conn.SetReadDeadline(time.Now().Add(60 * time.Minute))
+		self.conn.SetReadDeadline(time.Now().Add(INACTIVITY))
 
 		if !scanner.Scan() {
 			break
