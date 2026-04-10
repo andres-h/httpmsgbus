@@ -30,7 +30,7 @@ import (
 	"time"
 )
 
-const VERSION = "0.2 (2026.097)"
+const VERSION = "0.2 (2026.100)"
 
 const (
 	PLUGINFD        = 63
