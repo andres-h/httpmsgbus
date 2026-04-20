@@ -29,9 +29,10 @@ import (
 )
 
 const (
-	TIME_FORMAT = "2006-01-02T15:04:05Z"
+	CMDLEN      = 260 // 255 required by the spec
 	NSELECTORS  = 100
 	INACTIVITY  = 60 * time.Minute
+	TIME_FORMAT = "2006-01-02T15:04:05Z"
 )
 
 var sl3commands = []*regexp.Regexp{
@@ -49,6 +50,8 @@ var sl3commands = []*regexp.Regexp{
 	regexp.MustCompile("(?i)^(TIME)\\s+(\\d{4}),(\\d{1,2}),(\\d{1,2}),(\\d{1,2}),(\\d{1,2}),(\\d{1,2})(?:\\s+(\\d{4}),(\\d{1,2}),(\\d{1,2}),(\\d{1,2}),(\\d{1,2}),(\\d{1,2}))?\\s*$"),
 }
 
+var sl4sel = regexp.MustCompile("\\s+(!)?([A-Z0-9_*?]+)(?:\\.([A-Z0-9*?]{1,2}))?")
+
 var sl4commands = []*regexp.Regexp{
 	regexp.MustCompile("(?i)^(AUTH)\\s+([A-Z]+)\\s*(\\S+)\\s*$"),
 	regexp.MustCompile("(?i)^(BYE)\\s*$"),
@@ -57,7 +60,7 @@ var sl4commands = []*regexp.Regexp{
 	regexp.MustCompile("(?i)^(ENDFETCH)\\s*$"),
 	regexp.MustCompile("(?i)^(HELLO)\\s*$"),
 	regexp.MustCompile("(?i)^(INFO)\\s+([A-Z]+)(?:\\s+([A-Z0-9_*?]+)(?:\\s+([A-Z0-9_*?]+)(?:\\.([A-Z0-9*?]{1,2}))?)?)?\\s*$"),
-	regexp.MustCompile("(?i)^(SELECT)\\s+(!)?([A-Z0-9_*?]+)(?:\\.([A-Z0-9*?]{1,2}))?\\s*$"),
+	regexp.MustCompile("(?i)^(SELECT)((" + sl4sel.String() + ")+)\\s*$"),
 	regexp.MustCompile("(?i)^(STATION)\\s+([A-Z0-9_*?]+)\\s*$"),
 	regexp.MustCompile("(?i)^(USERAGENT)\\s+(.*)\\s*$"),
 }
@@ -306,37 +309,43 @@ func (self *SeedlinkConnection) _SELECT(neg, loc, cha, ext string) {
 	}
 }
 
-func (self *SeedlinkConnection) _SELECT4(neg, stream, format string) {
+func (self *SeedlinkConnection) _SELECT4(arg string) {
 	if self.queueSet == nil {
 		self._ERROR4("UNEXPECTED", "no station selected")
 		return
 	}
 
-	var _topic string
+	for _, a := range sl4sel.FindAllStringSubmatch(arg, -1) {
+		neg := a[1]
+		stream := a[2]
+		format := a[3]
 
-	if pat2rx(format + "*").MatchString("3D") { // in SL4 mode we provide 3D only
-		_topic = stream + "_?D"
+		var _topic string
 
-	} else {
-		_topic = "notexist"
-	}
+		if pat2rx(format + "*").MatchString("3D") { // in SL4 mode we provide 3D only
+			_topic = stream + "_?D"
 
-	if !self.topicSet[neg+_topic] {
-		self.topicSet[neg+_topic] = true
-
-		for _, q := range self.queueSet {
-			if len(q.Topics) >= NSELECTORS {
-				self._ERROR4("UNEXPECTED", "maximum number of selectors exceeded")
-				return
-			}
+		} else {
+			_topic = "notexist"
 		}
 
-		for _, q := range self.queueSet {
-			if q.Topics == nil {
-				q.Topics = make([]string, 0, NSELECTORS)
+		if !self.topicSet[neg+_topic] {
+			self.topicSet[neg+_topic] = true
+
+			for _, q := range self.queueSet {
+				if len(q.Topics) >= NSELECTORS {
+					self._ERROR4("UNEXPECTED", "maximum number of selectors exceeded")
+					return
+				}
 			}
 
-			q.Topics = append(q.Topics, neg+_topic)
+			for _, q := range self.queueSet {
+				if q.Topics == nil {
+					q.Topics = make([]string, 0, NSELECTORS)
+				}
+
+				q.Topics = append(q.Topics, neg+_topic)
+			}
 		}
 	}
 
@@ -721,6 +730,7 @@ func (self *SeedlinkConnection) start() {
 	defer self.conn.Close()
 
 	scanner := bufio.NewScanner(self.conn)
+	scanner.Buffer(make([]byte, CMDLEN), CMDLEN)
 	scanner.Split(scanCommands)
 
 loop:
@@ -775,7 +785,7 @@ loop:
 						continue loop
 
 					case "SELECT":
-						self._SELECT4(a[2], a[3], a[4])
+						self._SELECT4(a[2])
 						continue loop
 
 					case "STATION":
